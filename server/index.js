@@ -1,5 +1,5 @@
 'use strict';
-// LocalWaallah server: checks Firebase sign-ins, keeps each vendor's khata in PostgreSQL, and serves the app.
+// LocalWaala server: checks Firebase sign-ins, keeps each vendor's khata in PostgreSQL, and serves the app.
 const path = require('path');
 const express = require('express');
 const { Pool } = require('pg');
@@ -151,5 +151,5 @@ app.use(express.static(APP_DIR, {
 }));
 
 pool.query(SCHEMA)
-  .then(() => app.listen(PORT, () => console.log('LocalWaallah server on port ' + PORT + (DEV_LOGIN ? ' (DEV_LOGIN on)' : ''))))
+  .then(() => app.listen(PORT, () => console.log('LocalWaala server on port ' + PORT + (DEV_LOGIN ? ' (DEV_LOGIN on)' : ''))))
   .catch((e) => { console.error('Could not prepare the database:', e.message); process.exit(1); });

@@ -1,4 +1,4 @@
-/* LocalWaallah: offline-first delivery ledger. Everything is stored on the phone (localStorage). */
+/* LocalWaala: offline-first delivery ledger. Everything is stored on the phone (localStorage). */
 (function () {
   'use strict';
 
@@ -196,6 +196,9 @@
 
   // ---------- shared bits ----------
   const heroImg = 'milkman.webp';
+  const MARK = '<span class="logo"><img src="logo-mark.webp" alt="LocalWaala"></span>';
+  // Big logo with the wordmark, for the welcome, sign-in and loading screens.
+  const brand = (hi, sub) => '<div class="brand"><img src="logo.webp" alt="LocalWaala" width="220" height="203">' + (hi ? '<b>' + esc(hi) + '</b>' : '') + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div>';
   const other = (k) => (window.STRINGS[S.vendor.lang === 'hi' ? 'en' : 'hi'] || {})[k] || '';
   const bi = (k) => esc(t(k)) + '<small>' + esc(other(k)) + '</small>';
   const fill = (k, o) => t(k).replace(/\{(\w+)\}/g, (_, x) => o[x]);
@@ -209,11 +212,11 @@
     return '<span class="live">' + esc(t('saved')) + '</span>';
   }
   function appHead() {
-    return '<header class="apphead"><span class="logo">' + ic('can') + '</span><div class="t"><b>LocalWaallah</b><span>' + esc(S.vendor.name) + ' ' + live() + '</span></div>' +
+    return '<header class="apphead">' + MARK + '<div class="t"><b>' + esc(S.vendor.name) + '</b><span>' + live() + '</span></div>' +
       langBtn() + '<a class="iconbtn" href="#/settings" aria-label="' + esc(t('settings')) + '">' + ic('gear', 'sm') + '</a></header>';
   }
   function pageHead(title, sub, back) {
-    return '<header class="pagehead">' + (back ? '<a class="iconbtn plain" href="' + back + '" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a>' : '<span class="logo">' + ic('can') + '</span>') +
+    return '<header class="pagehead">' + (back ? '<a class="iconbtn plain" href="' + back + '" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a>' : MARK) +
       '<div class="grow"><h1>' + esc(title) + '</h1>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</div>' + langBtn() + '</header>';
   }
   function dayLabel(day) {
@@ -253,8 +256,7 @@
   // ---------- views ----------
   function viewWelcome() {
     const types = ['milk', 'paper', 'water', 'laundry', 'other'];
-    return '<div class="welcome"><header class="apphead"><span class="logo">' + ic('can') + '</span><div class="t"><b>LocalWaallah<small>लोकलवाला</small></b><span>' + esc(t('tagline')) + '</span></div>' + langBtn() + '</header>' +
-      '<div class="greet"><img src="' + heroImg + '" alt=""><span class="hi">' + esc(t('welcome')) + '</span><b>LocalWaallah</b><span class="d">' + esc(t('tagline')) + '</span></div>' +
+    return '<div class="welcome"><header class="apphead bare">' + langBtn() + '</header>' + brand(t('welcome'), t('tagline')) +
       '<div class="card"><div class="field"><label for="w-name">' + esc(t('vendorName')) + '</label><div class="inp">' + ic('user', 'sm') + '<input id="w-name" autocomplete="organization" placeholder="Ramesh Dairy" value="' + esc(acct ? acct.name : '') + '"></div></div>' +
       '<div class="field"><span class="lab">' + esc(t('whatSell')) + '</span><div class="pills" id="w-type">' +
       types.map((k, i) => '<button type="button" class="pill' + (i === 0 ? ' on' : '') + '" data-act="pick" data-val="' + k + '">' + esc(t(k)) + '</button>').join('') + '</div></div></div>' +
@@ -628,7 +630,7 @@
   }
   function canSvg(f) {
     const h = Math.round(26 * f);
-    return '<svg width="34" height="46" viewBox="0 0 34 46" fill="none" aria-hidden="true"><rect x="11" y="1" width="12" height="5" rx="1.5" fill="#7A7585"/><path d="M12 6v4l-7 5v27a3 3 0 0 0 3 3h18a3 3 0 0 0 3-3V15l-7-5V6" stroke="#7A7585" stroke-width="2.2" stroke-linejoin="round"/><rect x="7.5" y="' + (41 - h) + '" width="19" height="' + h + '" rx="2" fill="#3D348B"/></svg>';
+    return '<svg width="34" height="46" viewBox="0 0 34 46" fill="none" aria-hidden="true"><rect x="11" y="1" width="12" height="5" rx="1.5" fill="#7D8286"/><path d="M12 6v4l-7 5v27a3 3 0 0 0 3 3h18a3 3 0 0 0 3-3V15l-7-5V6" stroke="#7D8286" stroke-width="2.2" stroke-linejoin="round"/><rect x="7.5" y="' + (41 - h) + '" width="19" height="' + h + '" rx="2" fill="#2E3336"/></svg>';
   }
   function viewStock() {
     const day = ui.stockDay === 'tomorrow' ? addDays(todayStr(), 1) : todayStr();
@@ -697,7 +699,7 @@
     const ask = (txt) => 'https://wa.me/' + waPhone(d.vp) + '?text=' + encodeURIComponent(txt);
     document.title = d.v + ' · ' + d.n;
     const rows = d.l || [[d.p, d.un, d.q, d.r, d.a]];
-    return '<div class="pub"><header class="apphead"><span class="logo">' + ic('can') + '</span><div class="t"><b>' + esc(d.v) + '</b><span>LocalWaallah · ' + esc(t('noApp')) + '</span></div>' + langBtn() + '</header>' +
+    return '<div class="pub"><header class="apphead">' + MARK + '<div class="t"><b>' + esc(d.v) + '</b><span>LocalWaala · ' + esc(t('noApp')) + '</span></div>' + langBtn() + '</header>' +
       '<div class="card"><div class="profile"><span class="av big">' + esc(initials(d.n)) + '</span><div class="grow"><h2>' + esc(d.n) + '</h2><div class="sub">' + esc([d.f, rows.map((x) => x[0]).join(', ')].filter(Boolean).join(' · ')) + '</div></div></div></div>' +
       '<div class="hero"><div class="lab">' + esc(t('toPay')) + ' · ' + esc(monthLabel(ym)) + '</div><div class="big">' + rupees(Math.max(0, d.due)) + '</div>' +
       '<div class="brk">' + rows.map((x) => '<div><span>' + esc((rows.length > 1 ? x[0] + ' · ' : '') + fq(x[2]) + ' ' + x[1] + ' × ₹' + fq(x[3])) + '</span><b>' + rupees(x[4]) + '</b></div>').join('') + '<div><span>' + esc(t('oldDueShort')) + '</span><b>' + rupees(d.o) + '</b></div><div><span>' + esc(t('paid')) + '</span><b>− ' + rupees(d.pd) + '</b></div></div>' +
@@ -1101,7 +1103,7 @@
     },
     backup() {
       const blob = new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' });
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'localwaallah-backup-' + todayStr() + '.json'; a.click();
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'localwaala-backup-' + todayStr() + '.json'; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     }
   };
@@ -1119,7 +1121,7 @@
   window.addEventListener('offline', () => render());
 
   // ---------- accounts & sync ----------
-  // When a LocalWaallah server answers api/config, vendors sign in (Firebase) and each khata syncs to that server.
+  // When a LocalWaala server answers api/config, vendors sign in (Firebase) and each khata syncs to that server.
   // Without a server (GitHub Pages, the preview) the app keeps working on this phone only, as before.
   var acct = null; // { uid, email, phone, name } of the signed-in vendor
   const auth = { mode: 'local', ready: false, loading: false, dev: false, fb: null, cfg: null };
@@ -1275,7 +1277,7 @@
   const fbAuth = () => auth.fb.auth();
   const standalone = () => window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
 
-  const viewSplash = () => '<div class="splash"><span class="logo">' + ic('can', 'lg') + '</span><b>LocalWaallah</b><span class="muted">' + esc(t('loading')) + '</span></div>';
+  const viewSplash = () => '<div class="splash">' + brand() + '<span class="muted">' + esc(t('loading')) + '</span></div>';
   const GOOGLE = '<svg class="i" viewBox="0 0 48 48" aria-hidden="true" style="stroke:none"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
   function viewLogin() {
     const L = ui.login || (ui.login = { email: '', signup: false });
@@ -1291,8 +1293,7 @@
         '<button class="linkbtn" data-act="signupflip">' + esc(L.signup ? t('haveAcct') : t('newHere')) + '</button>' +
         (L.signup ? '' : '<button class="linkbtn" data-act="resetpw">' + esc(t('forgot')) + '</button>') + '</div>';
     }
-    return '<div class="welcome"><header class="apphead"><span class="logo">' + ic('can') + '</span><div class="t"><b>LocalWaallah<small>लोकलवाला</small></b><span>' + esc(t('tagline')) + '</span></div>' + langBtn() + '</header>' +
-      '<div class="greet"><img src="' + heroImg + '" alt=""><span class="hi">' + esc(t('welcome')) + '</span><b>LocalWaallah</b><span class="d">' + esc(t('tagline')) + '</span></div>' +
+    return '<div class="welcome"><header class="apphead bare">' + langBtn() + '</header>' + brand(t('welcome'), t('tagline')) +
       '<div class="card"><h2 style="font-size:20px">' + esc(t('signIn')) + '</h2><div class="muted" style="font-size:14px;font-weight:600;margin-bottom:14px">' + esc(other('signIn')) + '</div>' +
       (auth.dev ? '' : '<button class="btn white block gbtn" data-act="google"' + dis + '>' + GOOGLE + esc(t('google')) + '</button><div class="or"><span>' + esc(t('or')) + '</span></div>') +
       box + '</div><p class="muted" style="text-align:center;font-size:13px;font-weight:600;margin:16px 8px">' + esc(t('loginNote')) + '</p></div>';

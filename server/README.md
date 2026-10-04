@@ -1,4 +1,4 @@
-# LocalWaallah server
+# LocalWaala server
 
 Signs vendors in with Firebase (Google, or email and password), keeps each vendor's
 khata in PostgreSQL, and serves the app from `../app`. Each vendor only ever sees their own khata.

@@ -1,13 +1,13 @@
-/* LocalWaallah "Jamun" theme: deep indigo + lavender on warm cream, card layouts modelled on the Stitch screens. */
+/* LocalWaala theme, taken from the cow logo: charcoal + warm taupe on cream, card layouts modelled on the Stitch screens. */
 :root {
-  --bg: #FBF8F3; --s1: #F5F1EA; --s2: #EFEAE2; --s3: #E6E0D6; --card: #FFFFFF; --line: #E7E1D7;
-  --ink: #1C1B22; --ink2: #4A4656; --muted: #7A7585;
-  --pri: #3D348B; --pri2: #5249C4; --pri-ink: #FFFFFF; --pri-soft: #ECEAFF; --lav: #CBC5FF; --on-lav: #231B6E;
+  --bg: #FAF8F5; --s1: #F4F1ED; --s2: #ECE8E3; --s3: #E2DDD6; --card: #FFFFFF; --line: #E5E0D9;
+  --ink: #1E2224; --ink2: #4B5054; --muted: #7D8286;
+  --pri: #2E3336; --pri2: #4A5155; --pri-ink: #FFFFFF; --pri-soft: #EFE9E3; --lav: #DCD1C6; --on-lav: #3B342D;
   --amber: #FFE1B8; --on-amber: #6A3F00; --err: #BA1A1A; --err-soft: #FFDAD6;
-  --ok: #1B7A43; --ok-soft: #D5F2DF; --dark: #1F1B38;
+  --ok: #1B7A43; --ok-soft: #D5F2DF; --dark: #24282B;
   --given: #1E8A3C; --half: #E3A008; --skip: #D12C1F; --extra: #1A5BD1; --away: #6B7685;
   --r1: 8px; --r2: 12px; --r3: 16px; --r4: 24px;
-  --sh: 0 1px 2px rgba(31, 27, 56, .05), 0 4px 14px rgba(31, 27, 56, .05);
+  --sh: 0 1px 2px rgba(36, 40, 43, .05), 0 4px 14px rgba(36, 40, 43, .05);
   --font: 'Plus Jakarta Sans', 'Noto Sans Devanagari', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 * { box-sizing: border-box; }
@@ -33,7 +33,14 @@ h1, h2, h3 { margin: 0; letter-spacing: -.01em; }
 
 /* ---------- app header ---------- */
 .apphead { display: flex; align-items: center; gap: 12px; padding: 14px 0 12px; position: sticky; top: 0; z-index: 5; background: var(--bg); }
-.logo { width: 44px; height: 44px; border-radius: var(--r2); background: var(--pri); color: #fff; display: grid; place-items: center; flex: none; }
+.logo { width: 46px; height: 46px; border-radius: 50%; background: #fff; box-shadow: var(--sh); display: grid; place-items: center; flex: none; overflow: hidden; }
+.logo img { width: 40px; height: 40px; display: block; }
+.apphead.bare { justify-content: flex-end; }
+/* big logo with the wordmark (welcome, sign-in, loading) */
+.brand { display: flex; flex-direction: column; align-items: center; text-align: center; margin: 0 0 6px; }
+.brand img { width: 220px; height: auto; max-width: 70%; }
+.brand b { font-size: 24px; font-weight: 800; margin-top: 6px; }
+.brand span { font-size: 15px; font-weight: 600; color: var(--ink2); }
 .apphead .t { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .apphead .t b { font-size: 20px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .apphead .t b small { font-size: 13px; font-weight: 600; color: var(--ink2); margin-left: 4px; }
@@ -81,7 +88,7 @@ h1, h2, h3 { margin: 0; letter-spacing: -.01em; }
 
 /* ---------- greeting banner with the milkman ---------- */
 .greet { position: relative; margin-top: 4px; border-radius: var(--r4); background: linear-gradient(120deg, var(--pri) 0%, var(--pri2) 100%); color: #fff; padding: 18px 120px 18px 18px; overflow: hidden; min-height: 116px; }
-.greet::after { content: ''; position: absolute; right: -40px; top: -50px; width: 190px; height: 190px; border-radius: 50%; background: rgba(203, 197, 255, .28); }
+.greet::after { content: ''; position: absolute; right: -40px; top: -50px; width: 190px; height: 190px; border-radius: 50%; background: rgba(201, 189, 177, .28); }
 .greet img { position: absolute; right: 2px; bottom: -6px; height: 132px; z-index: 1; }
 .greet .hi { font-size: 15px; opacity: .85; }
 .greet b { display: block; font-size: 22px; font-weight: 800; margin: 2px 0 4px; }
@@ -118,7 +125,7 @@ h1, h2, h3 { margin: 0; letter-spacing: -.01em; }
 .secline::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 
 .rcard { background: #fff; border-radius: var(--r3); box-shadow: var(--sh); padding: 14px; margin-top: 12px; position: relative; }
-.rcard.next { box-shadow: 0 6px 22px rgba(61, 52, 139, .16); }
+.rcard.next { box-shadow: 0 6px 22px rgba(46, 51, 54, .16); }
 .rcard.next::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px; border-radius: 0 4px 4px 0; background: var(--pri); }
 .rtop { display: flex; gap: 12px; align-items: flex-start; }
 .flat { min-width: 64px; height: 48px; padding: 0 8px; border-radius: var(--r2); background: var(--s2); display: grid; place-items: center; font-weight: 800; font-size: 19px; flex: none; color: var(--ink); }
@@ -153,7 +160,7 @@ h1, h2, h3 { margin: 0; letter-spacing: -.01em; }
 .callbtn { display: inline-flex; align-items: center; gap: 5px; color: var(--pri); font-weight: 700; font-size: 15px; padding: 6px 2px; }
 
 .runbar { position: fixed; left: 0; right: 0; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 9; padding: 0 12px; pointer-events: none; }
-.runbar .in { max-width: 536px; margin: 0 auto; background: var(--dark); color: #fff; border-radius: var(--r4); padding: 10px 10px 10px 16px; display: flex; align-items: center; gap: 10px; box-shadow: 0 10px 30px rgba(31, 27, 56, .3); pointer-events: auto; }
+.runbar .in { max-width: 536px; margin: 0 auto; background: var(--dark); color: #fff; border-radius: var(--r4); padding: 10px 10px 10px 16px; display: flex; align-items: center; gap: 10px; box-shadow: 0 10px 30px rgba(36, 40, 43, .3); pointer-events: auto; }
 .runbar .ico { display: none; }
 .runbar .ico-x { width: 44px; height: 44px; border-radius: 50%; background: rgba(255, 255, 255, .12); display: grid; place-items: center; flex: none; }
 .runbar .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -173,7 +180,7 @@ body.has-run { padding-bottom: 176px; }
 .tab .pip { width: 58px; height: 32px; border-radius: 999px; display: grid; place-items: center; }
 .tab.on { color: var(--pri); }
 .tab.on .pip { background: var(--pri-soft); }
-.tab.fab .pip { width: 62px; height: 62px; border-radius: 50%; background: var(--pri); color: #fff; margin-top: -30px; box-shadow: 0 8px 20px rgba(61, 52, 139, .35); border: 4px solid #fff; }
+.tab.fab .pip { width: 62px; height: 62px; border-radius: 50%; background: var(--pri); color: #fff; margin-top: -30px; box-shadow: 0 8px 20px rgba(46, 51, 54, .35); border: 4px solid #fff; }
 
 /* ---------- customers list ---------- */
 .search { display: flex; align-items: center; gap: 10px; background: var(--s1); border-radius: var(--r3); padding: 0 14px; min-height: 54px; margin-top: 6px; color: var(--ink2); }
@@ -195,7 +202,7 @@ body.has-run { padding-bottom: 176px; }
 .profile h2 { font-size: 21px; font-weight: 800; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .profile .sub { font-size: 14px; color: var(--ink2); font-weight: 600; margin-top: 2px; }
 .hero { background: var(--pri); color: #fff; border-radius: var(--r4); padding: 18px; margin-top: 14px; position: relative; overflow: hidden; }
-.hero::after { content: ''; position: absolute; right: -50px; top: -60px; width: 170px; height: 170px; border-radius: 50%; background: rgba(203, 197, 255, .18); }
+.hero::after { content: ''; position: absolute; right: -50px; top: -60px; width: 170px; height: 170px; border-radius: 50%; background: rgba(201, 189, 177, .18); }
 .hero .lab { font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--lav); }
 .hero .big { font-size: 38px; font-weight: 800; margin: 4px 0 2px; position: relative; z-index: 1; }
 .hero .big small { font-size: 15px; font-weight: 600; color: var(--lav); margin-left: 6px; }
@@ -312,12 +319,9 @@ body.has-run { padding-bottom: 176px; }
 .noteline .d { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; }
 
 /* ---------- welcome ---------- */
-.welcome .greet { min-height: 170px; padding-right: 150px; margin-top: 8px; }
-.welcome .greet img { height: 180px; }
-.welcome .greet b { font-size: 28px; }
 
 /* ---------- sheets, toast ---------- */
-.scrim { position: fixed; inset: 0; background: rgba(28, 27, 34, .45); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
+.scrim { position: fixed; inset: 0; background: rgba(30, 34, 36, .45); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
 .sheet { width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; background: var(--bg); border-radius: var(--r4) var(--r4) 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
 .sheet h2 { font-size: 20px; font-weight: 800; }
 .amountshow { font-size: 44px; font-weight: 800; text-align: center; margin: 10px 0 6px; color: var(--pri); }
@@ -348,8 +352,6 @@ body.has-run #toast { bottom: calc(176px + env(safe-area-inset-bottom)); }
 
 /* ---------- sign in ---------- */
 .splash { min-height: 80vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
-.splash .logo { width: 72px; height: 72px; border-radius: var(--r3); }
-.splash b { font-size: 24px; font-weight: 800; }
 .gbtn { box-shadow: inset 0 0 0 2px var(--line); color: var(--ink); }
 .or { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: var(--muted); font-weight: 700; font-size: 14px; }
 .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--line); }

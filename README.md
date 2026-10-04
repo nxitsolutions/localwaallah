@@ -1,4 +1,4 @@
-# LocalWaallah
+# LocalWaala
 
 A daily delivery ledger for local vendors: milk, newspapers, water cans, laundry and ironing.
 It is built for people who may not read much, so it uses large text, icons, fixed status colors with symbols, and Hindi or English.
