@@ -22,7 +22,9 @@
   const waPhone = (p) => { const d = digits(p); return d.length === 10 ? '91' + d : d; };
 
   // ---------- storage ----------
-  const KEY = 'localwaallah.v1';
+  // Phone-only mode keeps one khata here; signed-in vendors each get their own key (see useAccount).
+  const LEGACY_KEY = 'localwaallah.v1';
+  let KEY = LEGACY_KEY;
   const blank = () => ({
     vendor: { name: '', phone: '', upi: '', lang: 'en', limit: 1000, type: 'milk' },
     products: [], customers: [], marks: {}, payments: []
@@ -30,9 +32,10 @@
   let S;
   try { S = JSON.parse(localStorage.getItem(KEY)) || blank(); } catch (e) { S = blank(); }
   let saveOk = true;
-  function save() {
+  function localSave() {
     try { localStorage.setItem(KEY, JSON.stringify(S)); saveOk = true; } catch (e) { saveOk = false; toast('Phone storage is full. Save a backup file.'); }
   }
+  function save() { localSave(); afterSave(); }
 
   const L = () => window.STRINGS[S.vendor.lang] || window.STRINGS.en;
   const t = (k) => L()[k] || window.STRINGS.en[k] || k;
@@ -68,6 +71,8 @@
     wallet: '<path d="M4 7a2 2 0 0 1 2-2h12v2"/><rect x="4" y="7" width="17" height="12" rx="2"/><path d="M16 13h2"/>',
     cal: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
     pin: '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/>',
+    lock: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
     user: '<circle cx="12" cy="8" r="3.8"/><path d="M4.5 20c.8-4 3.8-6 7.5-6s6.7 2 7.5 6"/>', link: '<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>'
   };
   const ic = (name, cls) => '<svg class="i ' + (cls || '') + '" viewBox="0 0 24 24" aria-hidden="true">' + P[name] + '</svg>';
@@ -197,9 +202,12 @@
   const dshort = (day) => parse(day).toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
   const initials = (n) => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
   const langBtn = () => '<button class="iconbtn" data-act="lang" aria-label="Change language">' + (S.vendor.lang === 'hi' ? 'A' : 'अ') + '</button>';
-  const live = () => navigator.onLine && saveOk
-    ? '<span class="live">' + esc(t('saved')) + '</span>'
-    : '<span class="live off">' + esc(t('offlineShort')) + '</span>';
+  function live() {
+    if (!navigator.onLine || !saveOk) return '<span class="live off">' + esc(t('offlineShort')) + '</span>';
+    if (acct && sync.state === 'busy') return '<span class="live busy">' + esc(t('syncing')) + '</span>';
+    if (acct && sync.state === 'error') return '<span class="live off">' + esc(t('notSynced')) + '</span>';
+    return '<span class="live">' + esc(t('saved')) + '</span>';
+  }
   function appHead() {
     return '<header class="apphead"><span class="logo">' + ic('can') + '</span><div class="t"><b>LocalWaallah</b><span>' + esc(S.vendor.name) + ' ' + live() + '</span></div>' +
       langBtn() + '<a class="iconbtn" href="#/settings" aria-label="' + esc(t('settings')) + '">' + ic('gear', 'sm') + '</a></header>';
@@ -247,7 +255,7 @@
     const types = ['milk', 'paper', 'water', 'laundry', 'other'];
     return '<div class="welcome"><header class="apphead"><span class="logo">' + ic('can') + '</span><div class="t"><b>LocalWaallah<small>लोकलवाला</small></b><span>' + esc(t('tagline')) + '</span></div>' + langBtn() + '</header>' +
       '<div class="greet"><img src="' + heroImg + '" alt=""><span class="hi">' + esc(t('welcome')) + '</span><b>LocalWaallah</b><span class="d">' + esc(t('tagline')) + '</span></div>' +
-      '<div class="card"><div class="field"><label for="w-name">' + esc(t('vendorName')) + '</label><div class="inp">' + ic('user', 'sm') + '<input id="w-name" autocomplete="organization" placeholder="Ramesh Dairy"></div></div>' +
+      '<div class="card"><div class="field"><label for="w-name">' + esc(t('vendorName')) + '</label><div class="inp">' + ic('user', 'sm') + '<input id="w-name" autocomplete="organization" placeholder="Ramesh Dairy" value="' + esc(acct ? acct.name : '') + '"></div></div>' +
       '<div class="field"><span class="lab">' + esc(t('whatSell')) + '</span><div class="pills" id="w-type">' +
       types.map((k, i) => '<button type="button" class="pill' + (i === 0 ? ' on' : '') + '" data-act="pick" data-val="' + k + '">' + esc(t(k)) + '</button>').join('') + '</div></div></div>' +
       '<div class="stack"><button class="btn big block" data-act="start">' + ic('check') + esc(t('start')) + '</button>' +
@@ -653,6 +661,9 @@
     const v = S.vendor;
     const fld = (icon, fid, lab, val, attrs) => '<div class="field"><label for="' + fid + '">' + esc(lab) + '</label><div class="inp">' + ic(icon, 'sm') + '<input id="' + fid + '" value="' + esc(val) + '" ' + (attrs || '') + '></div></div>';
     return pageHead(t('settings'), other('settings'), '#/home') +
+      (acct ? '<div class="card"><div class="profile"><span class="av big">' + esc(initials(acct.name || acct.email || S.vendor.name)) + '</span><div class="grow"><div class="lbl" style="margin:0">' + esc(t('account')) + '</div>' +
+        '<b style="font-size:17px;word-break:break-all">' + esc(acct.email || acct.phone || acct.name) + '</b><div class="sub">' + live() + '</div></div></div>' +
+        '<div class="stack"><button class="btn soft block" data-act="logout">' + esc(t('logout')) + '</button></div></div>' : '') +
       '<div class="card">' + fld('user', 's-name', t('vendorName'), v.name) + fld('phone', 's-phone', t('yourPhone'), v.phone, 'type="tel" inputmode="tel"') +
       fld('qr', 's-upi', t('upiId'), v.upi, 'autocapitalize="off"') + fld('alert', 's-limit', t('limit'), v.limit, 'type="number" inputmode="numeric"') +
       '<div class="field"><span class="lab">' + esc(t('language')) + '</span><div class="seg"><button type="button" class="' + (v.lang === 'en' ? 'on' : '') + '" data-act="setlang" data-val="en">English</button><button type="button" class="' + (v.lang === 'hi' ? 'on' : '') + '" data-act="setlang" data-val="hi">हिंदी</button></div></div></div>' +
@@ -1107,6 +1118,225 @@
   window.addEventListener('online', () => render());
   window.addEventListener('offline', () => render());
 
+  // ---------- accounts & sync ----------
+  // When a LocalWaallah server answers api/config, vendors sign in (Firebase) and each khata syncs to that server.
+  // Without a server (GitHub Pages, the preview) the app keeps working on this phone only, as before.
+  var acct = null; // { uid, email, phone, name } of the signed-in vendor
+  const auth = { mode: 'local', ready: false, loading: false, dev: false, fb: null, cfg: null };
+  let meta = { version: 0, dirty: false };
+  const sync = { state: 'idle', timer: null };
+  const lsGet = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage full: the khata save reports it */ } };
+  const metaKey = () => 'localwaallah.m.' + acct.uid;
+
+  function useAccount(u) {
+    const lang = S.vendor.lang;
+    acct = u;
+    lsSet('lw.account', u);
+    KEY = 'localwaallah.u.' + u.uid;
+    S = lsGet(KEY) || blank();
+    if (!S.vendor.name) S.vendor.lang = lang;
+    S.customers.forEach(lines);
+    meta = lsGet(metaKey()) || { version: 0, dirty: false };
+  }
+  function afterSave() {
+    if (!acct) return;
+    meta.dirty = true; lsSet(metaKey(), meta);
+    clearTimeout(sync.timer); sync.timer = setTimeout(push, 1500);
+  }
+  async function idToken() {
+    if (auth.dev) return 'dev:' + acct.uid.replace(/^dev-/, '');
+    const u = auth.fb && auth.fb.auth().currentUser;
+    if (!u) throw new Error('signed out');
+    return u.getIdToken();
+  }
+  async function api(method, body) {
+    const res = await fetch('api/ledger', { method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await idToken() }, body: body ? JSON.stringify(body) : undefined });
+    return { status: res.status, data: await res.json().catch(() => ({})) };
+  }
+  // Two phones changed the same khata: keep everything from both, and this phone's copy where both changed one thing.
+  function merge(remote, local) {
+    if (!remote) return local;
+    const byId = (a, b) => { const m = new Map(); (a || []).forEach((x) => m.set(x.id, x)); (b || []).forEach((x) => m.set(x.id, x)); return [...m.values()]; };
+    const marks = JSON.parse(JSON.stringify(remote.marks || {}));
+    Object.keys(local.marks || {}).forEach((d) => { marks[d] = Object.assign(marks[d] || {}, local.marks[d]); });
+    return { vendor: Object.assign({}, remote.vendor, local.vendor), products: byId(remote.products, local.products), customers: byId(remote.customers, local.customers), marks, payments: byId(remote.payments, local.payments) };
+  }
+  function setSync(st) {
+    sync.state = st;
+    document.querySelectorAll('.live').forEach((el) => { el.outerHTML = live(); });
+  }
+  async function push(retried) {
+    if (!acct || !navigator.onLine || !meta.dirty || sync.state === 'busy') return;
+    setSync('busy');
+    try {
+      const r = await api('PUT', { data: S, baseVersion: meta.version });
+      if (r.status === 409 && !retried) {
+        S = merge(r.data.data, S); S.customers.forEach(lines);
+        meta.version = r.data.version || 0; localSave(); lsSet(metaKey(), meta);
+        setSync('idle'); render();
+        return push(true);
+      }
+      if (r.status !== 200) throw new Error('sync ' + r.status);
+      meta = { version: r.data.version, dirty: false }; lsSet(metaKey(), meta);
+      setSync('idle');
+    } catch (e) { setSync('error'); }
+  }
+  async function pull() {
+    if (!acct || !navigator.onLine) return;
+    setSync('busy');
+    try {
+      const r = await api('GET');
+      if (r.status !== 200) throw new Error('sync ' + r.status);
+      const remote = r.data;
+      if (!remote.version) {
+        // First sign-in: bring along a khata this phone kept before accounts existed.
+        const legacy = lsGet(LEGACY_KEY);
+        if (!S.vendor.name && legacy && legacy.vendor && legacy.vendor.name) {
+          S = legacy; S.customers.forEach(lines);
+          localStorage.removeItem(LEGACY_KEY);
+        }
+        meta.version = 0;
+        if (S.vendor.name) meta.dirty = true;
+      } else if (remote.version !== meta.version) {
+        S = meta.dirty ? merge(remote.data, S) : remote.data;
+        S.customers.forEach(lines);
+        meta.version = remote.version;
+      }
+      localSave(); lsSet(metaKey(), meta);
+      setSync('idle'); render();
+      if (meta.dirty) push();
+    } catch (e) { setSync('error'); }
+  }
+  async function signedIn(u) {
+    const fresh = !acct || acct.uid !== u.uid;
+    if (fresh) useAccount(u); else { acct = Object.assign(acct, u); lsSet('lw.account', acct); }
+    ui.login = null;
+    if (fresh && !S.vendor.name && navigator.onLine) { auth.loading = true; render(); await pull(); auth.loading = false; render(); }
+    else { render(); pull(); }
+  }
+  function signedOut() {
+    const lang = S.vendor.lang;
+    acct = null; localStorage.removeItem('lw.account');
+    KEY = LEGACY_KEY; S = blank(); S.vendor.lang = lang;
+    location.hash = '#/home'; render();
+  }
+  function loadScript(src) {
+    return new Promise((ok, no) => { const el = document.createElement('script'); el.src = src; el.onload = ok; el.onerror = no; document.head.appendChild(el); });
+  }
+  async function boot() {
+    let cfg = null;
+    try {
+      const ctl = new AbortController();
+      setTimeout(() => ctl.abort(), 5000);
+      const r = await fetch('api/config', { signal: ctl.signal, cache: 'no-store' });
+      if (r.ok && /json/.test(r.headers.get('content-type') || '')) cfg = await r.json();
+    } catch (e) { /* no server or no signal */ }
+    if (cfg && (cfg.firebase || cfg.devLogin)) lsSet('lw.cfg', cfg); else cfg = navigator.onLine ? null : lsGet('lw.cfg');
+    const cached = lsGet('lw.account');
+    if (!cfg) { auth.ready = true; render(); return; }
+    auth.mode = 'server'; auth.cfg = cfg; auth.dev = !cfg.firebase && !!cfg.devLogin;
+    if (cached) { useAccount(cached); auth.ready = true; render(); }
+    if (auth.dev) { auth.ready = true; render(); if (cached) pull(); return; }
+    try {
+      const v = 'https://www.gstatic.com/firebasejs/10.14.1/';
+      if (!window.firebase) {
+        await loadScript(v + 'firebase-app-compat.js');
+        await loadScript(v + 'firebase-auth-compat.js');
+      }
+      auth.fb = window.firebase;
+      auth.fb.initializeApp(cfg.firebase);
+    } catch (e) {
+      auth.ready = true; render();
+      if (!cached) toast(t('needNet'));
+      return;
+    }
+    const fa = auth.fb.auth();
+    fa.languageCode = S.vendor.lang === 'hi' ? 'hi' : 'en';
+    fa.getRedirectResult().catch((e) => toast(authError(e)));
+    fa.onAuthStateChanged((u) => {
+      auth.ready = true;
+      if (u) signedIn({ uid: u.uid, email: u.email || '', phone: u.phoneNumber || '', name: u.displayName || '' });
+      else if (navigator.onLine || !cached) { if (acct) signedOut(); else render(); }
+      else render();
+    });
+  }
+  function authError(e) {
+    const c = (e && e.code) || '';
+    if (/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)) return t('badLogin');
+    if (/email-already-in-use/.test(c)) return t('emailUsed');
+    if (/weak-password/.test(c)) return t('weakPw');
+    if (/too-many-requests|quota-exceeded/.test(c)) return t('tooMany');
+    if (/network-request-failed/.test(c)) return t('needNet');
+    if (/popup-closed-by-user|cancelled-popup-request/.test(c)) return '';
+    return (e && e.message) || 'Error';
+  }
+  const failed = (e) => { ui.busy = false; render(); const m = authError(e); if (m) toast(m); };
+  const fbAuth = () => auth.fb.auth();
+  const standalone = () => window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+
+  const viewSplash = () => '<div class="splash"><span class="logo">' + ic('can', 'lg') + '</span><b>LocalWaallah</b><span class="muted">' + esc(t('loading')) + '</span></div>';
+  const GOOGLE = '<svg class="i" viewBox="0 0 48 48" aria-hidden="true" style="stroke:none"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
+  function viewLogin() {
+    const L = ui.login || (ui.login = { email: '', signup: false });
+    const dis = ui.busy ? ' disabled' : '';
+    let box;
+    if (auth.dev) {
+      box = '<div class="field"><label for="l-dev">' + esc(t('devLogin')) + '</label><div class="inp">' + ic('user', 'sm') + '<input id="l-dev" placeholder="ramesh" autocomplete="off"></div></div>' +
+        '<div class="stack"><button class="btn big block" data-act="devlogin">' + ic('check') + esc(t('signInBtn')) + '</button></div>';
+    } else {
+      box = '<div class="field"><label for="l-email">' + esc(t('email')) + '</label><div class="inp">' + ic('mail', 'sm') + '<input id="l-email" type="email" autocomplete="email" value="' + esc(L.email) + '"></div></div>' +
+        '<div class="field"><label for="l-pass">' + esc(t('password')) + '</label><div class="inp">' + ic('lock', 'sm') + '<input id="l-pass" type="password" autocomplete="' + (L.signup ? 'new-password' : 'current-password') + '"></div></div>' +
+        '<div class="stack"><button class="btn big block" data-act="emailgo"' + dis + '>' + ic('check') + esc(L.signup ? t('createAcct') : t('signInBtn')) + '</button>' +
+        '<button class="linkbtn" data-act="signupflip">' + esc(L.signup ? t('haveAcct') : t('newHere')) + '</button>' +
+        (L.signup ? '' : '<button class="linkbtn" data-act="resetpw">' + esc(t('forgot')) + '</button>') + '</div>';
+    }
+    return '<div class="welcome"><header class="apphead"><span class="logo">' + ic('can') + '</span><div class="t"><b>LocalWaallah<small>लोकलवाला</small></b><span>' + esc(t('tagline')) + '</span></div>' + langBtn() + '</header>' +
+      '<div class="greet"><img src="' + heroImg + '" alt=""><span class="hi">' + esc(t('welcome')) + '</span><b>LocalWaallah</b><span class="d">' + esc(t('tagline')) + '</span></div>' +
+      '<div class="card"><h2 style="font-size:20px">' + esc(t('signIn')) + '</h2><div class="muted" style="font-size:14px;font-weight:600;margin-bottom:14px">' + esc(other('signIn')) + '</div>' +
+      (auth.dev ? '' : '<button class="btn white block gbtn" data-act="google"' + dis + '>' + GOOGLE + esc(t('google')) + '</button><div class="or"><span>' + esc(t('or')) + '</span></div>') +
+      box + '</div><p class="muted" style="text-align:center;font-size:13px;font-weight:600;margin:16px 8px">' + esc(t('loginNote')) + '</p></div>';
+  }
+  const snapLogin = () => {
+    const L = ui.login; if (!L) return;
+    if ($('#l-email')) L.email = $('#l-email').value.trim();
+  };
+  const authHandlers = {
+    signupflip() { snapLogin(); ui.login.signup = !ui.login.signup; render(); },
+    google() {
+      const fb = auth.fb; const p = new fb.auth.GoogleAuthProvider();
+      p.setCustomParameters({ prompt: 'select_account' });
+      (standalone() ? fbAuth().signInWithRedirect(p) : fbAuth().signInWithPopup(p)).catch(failed);
+    },
+    emailgo() {
+      snapLogin();
+      const L = ui.login; const pw = $('#l-pass').value;
+      if (!L.email || !pw) { toast(t('badLogin')); return; }
+      ui.busy = true; render();
+      (L.signup ? fbAuth().createUserWithEmailAndPassword(L.email, pw) : fbAuth().signInWithEmailAndPassword(L.email, pw))
+        .then(() => { ui.busy = false; }).catch(failed);
+    },
+    resetpw() {
+      snapLogin();
+      if (!ui.login.email) { toast(t('email') + '?'); $('#l-email').focus(); return; }
+      fbAuth().sendPasswordResetEmail(ui.login.email).then(() => toast(t('resetSent')), failed);
+    },
+    devlogin() {
+      const n = $('#l-dev').value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+      if (!n) { $('#l-dev').focus(); return; }
+      auth.ready = true; signedIn({ uid: 'dev-' + n, email: '', phone: '', name: n });
+    },
+    logout() {
+      askThen(t('logoutAsk'), async () => {
+        if (meta.dirty) await push();
+        if (auth.fb) await fbAuth().signOut().catch(() => {});
+        signedOut();
+      });
+    }
+  };
+
+  Object.assign(handlers, authHandlers);
+
   // ---------- router ----------
   const isRoute = (r) => r === '' || r === 'home' || r === 'today';
   function tabBar(cur) {
@@ -1123,6 +1353,8 @@
     let html;
     const r = route || '';
     if (r === 's') html = viewPublic(a || '');
+    else if (!auth.ready || auth.loading) html = viewSplash();
+    else if (auth.mode === 'server' && !acct) html = viewLogin();
     else if (!S.vendor.name) html = viewWelcome();
     else if (isRoute(r)) html = viewRoute();
     else if (r === 'customers') html = viewCustomers();
@@ -1132,7 +1364,7 @@
     else if (r === 'stock') html = viewStock();
     else if (r === 'settings') html = viewSettings();
     else html = viewRoute();
-    const tabbed = r !== 's' && !!S.vendor.name && (isRoute(r) || ['customers', 'money', 'stock'].includes(r) || (r === 'edit' && a === 'new'));
+    const tabbed = r !== 's' && auth.ready && !auth.loading && (auth.mode === 'local' || !!acct) && !!S.vendor.name && (isRoute(r) || ['customers', 'money', 'stock'].includes(r) || (r === 'edit' && a === 'new'));
     const cur = isRoute(r) ? 'home' : r === 'edit' ? 'edit/new' : r;
     document.body.classList.toggle('has-nav', tabbed);
     document.body.classList.toggle('has-run', tabbed && isRoute(r) && active().length > 0);
@@ -1146,7 +1378,9 @@
   });
   lastRoute = location.hash.split('/')[1] || '';
   render();
+  boot();
+  window.addEventListener('online', () => { if (acct) pull(); });
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
-  window.LW = { get state() { return S; }, dayInfo, balance, monthBill, publicLink, applyVoice };
+  window.LW = { get state() { return S; }, get account() { return acct; }, get sync() { return { state: sync.state, version: meta.version, dirty: meta.dirty }; }, dayInfo, balance, monthBill, publicLink, applyVoice, merge };
 })();

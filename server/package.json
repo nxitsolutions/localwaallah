@@ -1,0 +1,18 @@
+{
+  "name": "localwaallah-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sign-in and khata sync for LocalWaallah vendors, and hosting for the app.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "firebase-admin": "^13.10.0",
+    "pg": "^8.23.1"
+  }
+}

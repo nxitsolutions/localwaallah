@@ -1,5 +1,5 @@
 // Offline-first: the app shell is cached on install, everything else is cached as it is used.
-const CACHE = 'localwaallah-v4';
+const CACHE = 'localwaallah-v5';
 const SHELL = ['./', 'index.html', 'styles.css', 'i18n.js', 'app.js', 'milkman.webp', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -16,6 +16,8 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  // Sign-in and khata sync always go to the server, never to the cache.
+  if (new URL(e.request.url).pathname.includes('/api/')) return;
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then((hit) => {
       const net = fetch(e.request)

@@ -11,7 +11,9 @@ It is built for people who may not read much, so it uses large text, icons, fixe
 - **Customer link**: opens the customer's calendar and a Pay by UPI button with no app install. All of the bill data is inside the link, so no server is needed.
 - **Collect money**: cash, UPI, cheque or bank payments on a big keypad, dues list with an over-limit warning, and today's cash in hand.
 - **Morning stock**: total litres for today or tomorrow shown as 40 L cans, read aloud, and sent to the dairy on WhatsApp.
-- **Works offline**: data is saved on the phone (localStorage) and the app shell is cached by a service worker. Settings has backup and restore.
+- **Several items per customer**: a house can take milk daily, paneer on weekends and curd when they call, each with its own quantity, days and rate.
+- **Vendor accounts**: on your own server, vendors sign in with Google or email and password (Firebase) and each khata is saved to PostgreSQL. See [server/README.md](server/README.md).
+- **Works offline**: data is saved on the phone (localStorage) and the app shell is cached by a service worker. With the server it syncs when the phone is back online. Settings has backup and restore.
 
 ## Project layout
 
@@ -24,6 +26,8 @@ app/                  the whole app, plain HTML, CSS and JavaScript (no build st
   sw.js               offline cache
   manifest.webmanifest
 .github/workflows/pages.yml   publishes app/ to GitHub Pages on every push to main
+server/               Node.js server: Firebase sign-in, khata sync in PostgreSQL, serves app/
+Dockerfile, docker-compose.yml, .env.example   run the server and database with Docker
 ```
 
 ## Run it locally
@@ -35,6 +39,10 @@ python3 -m http.server 8000 --directory app
 Then open http://localhost:8000 and tap "Try with sample data".
 
 ## Hosting
+
+**On your own server (with vendor accounts):** follow [server/README.md](server/README.md).
+
+**GitHub Pages (no accounts, each phone keeps its own khata):**
 
 The `Publish app` workflow deploys `app/` to GitHub Pages. Pages must be turned on once in
 Settings → Pages → Build and deployment → Source: **GitHub Actions**.

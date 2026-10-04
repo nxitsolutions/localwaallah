@@ -41,7 +41,7 @@ window.STRINGS = {
     sendDues: 'Send dues on WhatsApp', payLinks: 'reminders', overdue: 'Overdue accounts', daysSince: 'days since paid', lastPaid: 'Last paid',
     ping: 'Ping WhatsApp', rates: 'Product rates', activeHomes: 'homes', editRate: 'Edit rate', details: 'Customer details',
     deliverySetup: 'Daily delivery', firstDay: 'First delivery day', estMonthly: 'Est. monthly bill', perMonth: '/ month', optional: 'optional',
-    pickCustomer: 'Who paid?', stockSub: 'What to pick up', offlineShort: 'Offline', tagline: 'Daily delivery khata', itemsN: 'items', itemN: 'Item', addAnother: 'Add another item'
+    pickCustomer: 'Who paid?', stockSub: 'What to pick up', offlineShort: 'Offline', tagline: 'Daily delivery khata', itemsN: 'items', itemN: 'Item', addAnother: 'Add another item', signIn: 'Sign in to continue', google: 'Continue with Google', or: 'or', email: 'Email', password: 'Password', signInBtn: 'Sign in', createAcct: 'Create account', newHere: 'New here? Create an account', haveAcct: 'Already registered? Sign in', forgot: 'Forgot password?', resetSent: 'Password reset email sent', badLogin: 'Wrong email or password', emailUsed: 'This email already has an account. Sign in instead.', weakPw: 'Password needs at least 6 characters', tooMany: 'Too many tries. Wait a few minutes.', needNet: 'Internet is needed to sign in', loginNote: 'Your khata stays on this phone and is backed up to the server.', logout: 'Log out', logoutAsk: 'Log out of this phone?', account: 'Account', syncing: 'Syncing', notSynced: 'Not synced', loading: 'Loading…', devLogin: 'Test login (development only)'
   },
   hi: {
     namaste: 'नमस्ते,', houses: 'घर', saved: 'सेव', offline: 'नेटवर्क नहीं। फ़ोन में सेव है।',
@@ -84,6 +84,6 @@ window.STRINGS = {
     sendDues: 'व्हाट्सऐप पर बकाया भेजें', payLinks: 'याद दिलाएँ', overdue: 'बकायादार', daysSince: 'दिन से जमा नहीं', lastPaid: 'आखिरी जमा',
     ping: 'व्हाट्सऐप करें', rates: 'सामान के रेट', activeHomes: 'घर', editRate: 'रेट बदलें', details: 'ग्राहक की जानकारी',
     deliverySetup: 'रोज़ की डिलीवरी', firstDay: 'पहली डिलीवरी', estMonthly: 'अंदाज़न महीने का बिल', perMonth: '/ महीना', optional: 'ज़रूरी नहीं',
-    pickCustomer: 'किसने पैसे दिए?', stockSub: 'कितना लेना है', offlineShort: 'ऑफ़लाइन', tagline: 'रोज़ की डिलीवरी का खाता', itemsN: 'सामान', itemN: 'सामान', addAnother: 'एक और सामान जोड़ें'
+    pickCustomer: 'किसने पैसे दिए?', stockSub: 'कितना लेना है', offlineShort: 'ऑफ़लाइन', tagline: 'रोज़ की डिलीवरी का खाता', itemsN: 'सामान', itemN: 'सामान', addAnother: 'एक और सामान जोड़ें', signIn: 'आगे बढ़ने के लिए साइन इन करें', google: 'Google से जारी रखें', or: 'या', email: 'ईमेल', password: 'पासवर्ड', signInBtn: 'साइन इन', createAcct: 'खाता बनाएँ', newHere: 'नए हैं? खाता बनाएँ', haveAcct: 'पहले से खाता है? साइन इन करें', forgot: 'पासवर्ड भूल गए?', resetSent: 'पासवर्ड बदलने का ईमेल भेजा', badLogin: 'ईमेल या पासवर्ड गलत है', emailUsed: 'इस ईमेल का खाता पहले से है। साइन इन करें।', weakPw: 'पासवर्ड कम से कम 6 अक्षर का हो', tooMany: 'बहुत बार कोशिश हुई। कुछ मिनट रुकें।', needNet: 'साइन इन के लिए इंटरनेट चाहिए', loginNote: 'आपका खाता इस फ़ोन में रहता है और सर्वर पर भी सेव होता है।', logout: 'लॉग आउट', logoutAsk: 'इस फ़ोन से लॉग आउट करें?', account: 'खाता', syncing: 'सिंक हो रहा', notSynced: 'सिंक नहीं हुआ', loading: 'लोड हो रहा है…', devLogin: 'टेस्ट लॉगिन (सिर्फ़ डेवलपमेंट)'
   }
 };
