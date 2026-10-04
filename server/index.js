@@ -1,5 +1,5 @@
 'use strict';
-// LocalWaallah server: checks Firebase sign-ins, keeps each vendor's khata in PostgreSQL, and serves the app.
+// LocalWaala server: checks Firebase sign-ins, keeps each vendor's khata in PostgreSQL, and serves the app.
 const path = require('path');
 const express = require('express');
 const { Pool } = require('pg');
@@ -18,6 +18,8 @@ const firebase = {
   projectId: env.FIREBASE_PROJECT_ID,
   appId: env.FIREBASE_APP_ID
 };
+// Optional: shows the Google map on the Route screen. It is a browser key, so restrict it to your domain.
+const MAPS_KEY = env.GOOGLE_MAPS_API_KEY || '';
 const hasFirebase = !!(firebase.apiKey && firebase.projectId && firebase.authDomain);
 if (!hasFirebase && !DEV_LOGIN) {
   console.error('Set FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID and FIREBASE_APP_ID (see server/README.md).');
@@ -98,7 +100,7 @@ app.get('/healthz', (req, res) => res.json({ ok: true }));
 // The app asks this first: an answer means "sign in through this server"; no answer means phone-only mode.
 app.get('/api/config', (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ firebase: hasFirebase ? firebase : null, devLogin: DEV_LOGIN });
+  res.json({ firebase: hasFirebase ? firebase : null, devLogin: DEV_LOGIN, mapsKey: MAPS_KEY || null });
 });
 
 app.get('/api/ledger', authed(async (req, res, u) => {
@@ -151,5 +153,5 @@ app.use(express.static(APP_DIR, {
 }));
 
 pool.query(SCHEMA)
-  .then(() => app.listen(PORT, () => console.log('LocalWaallah server on port ' + PORT + (DEV_LOGIN ? ' (DEV_LOGIN on)' : ''))))
+  .then(() => app.listen(PORT, () => console.log('LocalWaala server on port ' + PORT + (DEV_LOGIN ? ' (DEV_LOGIN on)' : ''))))
   .catch((e) => { console.error('Could not prepare the database:', e.message); process.exit(1); });

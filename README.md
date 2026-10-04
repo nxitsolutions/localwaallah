@@ -1,4 +1,4 @@
-# LocalWaallah
+# LocalWaala
 
 A daily delivery ledger for local vendors: milk, newspapers, water cans, laundry and ironing.
 It is built for people who may not read much, so it uses large text, icons, fixed status colors with symbols, and Hindi or English.
@@ -12,6 +12,7 @@ It is built for people who may not read much, so it uses large text, icons, fixe
 - **Collect money**: cash, UPI, cheque or bank payments on a big keypad, dues list with an over-limit warning, and today's cash in hand.
 - **Morning stock**: total litres for today or tomorrow shown as 40 L cans, read aloud, and sent to the dairy on WhatsApp.
 - **Several items per customer**: a house can take milk daily, paneer on weekends and curd when they call, each with its own quantity, days and rate.
+- **Route map**: the vendor sets where the round starts and adds each customer's address, or pins it with the phone's GPS at the door. The Route screen shows the day's houses on a Google map in route order, and **Start directions** opens turn-by-turn directions in Google Maps through the next houses. **Route order** moves houses up or down, or picks the **Best order** (by road with a Maps key, otherwise by straight-line distance between pins).
 - **Vendor accounts**: on your own server, vendors sign in with Google or email and password (Firebase) and each khata is saved to PostgreSQL. See [server/README.md](server/README.md).
 - **Works offline**: data is saved on the phone (localStorage) and the app shell is cached by a service worker. With the server it syncs when the phone is back online. Settings has backup and restore.
 

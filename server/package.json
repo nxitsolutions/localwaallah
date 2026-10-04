@@ -2,7 +2,7 @@
   "name": "localwaallah-server",
   "version": "1.0.0",
   "private": true,
-  "description": "Sign-in and khata sync for LocalWaallah vendors, and hosting for the app.",
+  "description": "Sign-in and khata sync for LocalWaala vendors, and hosting for the app.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
