@@ -71,6 +71,11 @@
     wallet: '<path d="M4 7a2 2 0 0 1 2-2h12v2"/><rect x="4" y="7" width="17" height="12" rx="2"/><path d="M16 13h2"/>',
     cal: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
     pin: '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
+    route: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H16a3.5 3.5 0 0 0 0-7H8a3.5 3.5 0 0 1 0-7h7.5"/>',
+    sort: '<path d="M7 4v16"/><path d="m3.5 7.5 3.5-3.5 3.5 3.5"/><path d="M17 20V4"/><path d="m13.5 16.5 3.5 3.5 3.5-3.5"/>',
+    nav: '<path d="M3 11 21 3l-8 18-2-8z"/>',
+    up: '<path d="m6 15 6-6 6 6"/>', down: '<path d="m6 9 6 6 6-6"/>',
+    target: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
     mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/>',
     lock: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
     user: '<circle cx="12" cy="8" r="3.8"/><path d="M4.5 20c.8-4 3.8-6 7.5-6s6.7 2 7.5 6"/>', link: '<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>'
@@ -168,8 +173,10 @@
     return { old, lines: ls, qty: ls[0].qty, amount, paid, due: old + amount - paid };
   }
   const active = () => S.customers.filter((c) => !c.deleted);
+  // Houses the vendor arranged (Route order) come first in that order; the rest follow by area and flat.
+  const ordOf = (c) => (c.order == null ? 1e9 : c.order);
   function sortRoute(list) {
-    return list.slice().sort((a, b) => (a.sector || '').localeCompare(b.sector || '') || (a.flat || '').localeCompare(b.flat || '', undefined, { numeric: true }) || a.name.localeCompare(b.name));
+    return list.slice().sort((a, b) => ordOf(a) - ordOf(b) || (a.sector || '').localeCompare(b.sector || '') || (a.flat || '').localeCompare(b.flat || '', undefined, { numeric: true }) || a.name.localeCompare(b.name));
   }
 
   S.customers.forEach(lines);
@@ -253,6 +260,239 @@
   const rowKind = (i) => (i.pending ? 'pending' : i.st === 'skip' || i.st === 'away' ? 'skip' : i.st === 'none' ? 'call' : 'done');
   const WD = () => (S.vendor.lang === 'hi' ? ['र', 'सो', 'मं', 'बु', 'गु', 'शु', 'श'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S']);
 
+  // ---------- addresses & route map ----------
+  // A place is a GPS pin {lat, lng} or a typed address; Google Maps understands both.
+  const hasGeo = (o) => !!(o && o.geo && isFinite(o.geo.lat) && isFinite(o.geo.lng));
+  const placeOf = (o) => (hasGeo(o) ? o.geo.lat.toFixed(6) + ',' + o.geo.lng.toFixed(6) : String((o && o.addr) || '').trim());
+  const gpsPin = (pos) => ({ lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6), q: 'gps' });
+  // Asks the phone where it is. fn gets a pin, or nothing when the location is not available.
+  function getGps(fn) {
+    if (!navigator.geolocation) { toast(t('gpsFail')); return; }
+    toast(t('gettingGps'));
+    navigator.geolocation.getCurrentPosition((pos) => { fn(gpsPin(pos)); toast(t('pinned')); }, () => toast(t('gpsFail')), { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+  }
+  const geoNote = (o) => (hasGeo(o) && o.geo.q === 'gps' ? '<span class="tag ok">' + ic('check', 'xs') + esc(t('pinned')) + '</span>' : '');
+  const customOrder = () => active().some((c) => c.order != null);
+  const setOrder = (list) => list.forEach((c, i) => { c.order = i; });
+  // Google Maps link with turn-by-turn directions. Phones accept up to 9 stops in between, so it covers the next 10 houses.
+  function dirUrl(stops, from) {
+    const pts = stops.map(placeOf).filter(Boolean).slice(0, 10);
+    if (!pts.length) return '';
+    const q = ['api=1', 'travelmode=driving', 'destination=' + encodeURIComponent(pts[pts.length - 1])];
+    if (from) q.push('origin=' + encodeURIComponent(from));
+    if (pts.length > 1) q.push('waypoints=' + encodeURIComponent(pts.slice(0, -1).join('|')));
+    return 'https://www.google.com/maps/dir/?' + q.join('&');
+  }
+  function km(a, b) {
+    const r = Math.PI / 180, dl = (b.lat - a.lat) * r, dn = (b.lng - a.lng) * r;
+    const h = Math.sin(dl / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dn / 2) ** 2;
+    return 12742 * Math.asin(Math.sqrt(h));
+  }
+  // Shortest-looking order over pinned houses: visit the nearest house next, then undo any crossings (2-opt).
+  // Houses without a pin keep their order at the end. Returns null when fewer than two houses are pinned.
+  function bestOrder(list, start) {
+    const pinned = list.filter(hasGeo), rest = list.filter((c) => !hasGeo(c));
+    if (pinned.length < 2) return null;
+    let cur = start || pinned[0].geo;
+    const left = pinned.slice(), out = [];
+    while (left.length) {
+      let bi = 0, bd = Infinity;
+      left.forEach((c, i) => { const d = km(cur, c.geo); if (d < bd) { bd = d; bi = i; } });
+      cur = left[bi].geo; out.push(left.splice(bi, 1)[0]);
+    }
+    const P = [start || out[0].geo].concat(out.map((c) => c.geo));
+    const n = P.length - 1;
+    for (let pass = 0, better = true; better && pass < 50; pass++) {
+      better = false;
+      for (let i = 1; i < n; i++) {
+        for (let j = i + 1; j <= n; j++) {
+          const before = km(P[i - 1], P[i]) + (j < n ? km(P[j], P[j + 1]) : 0);
+          const after = km(P[i - 1], P[j]) + (j < n ? km(P[i], P[j + 1]) : 0);
+          if (after < before - 1e-9) {
+            P.splice(i, j - i + 1, ...P.slice(i, j + 1).reverse());
+            out.splice(i - 1, j - i + 1, ...out.slice(i - 1, j).reverse());
+            better = true;
+          }
+        }
+      }
+    }
+    return out.concat(rest);
+  }
+  // Houses the vendor visits on a day, in route order.
+  const mapStops = (rows) => rows.filter((r) => { const k = rowKind(r.i); return k === 'pending' || k === 'done' || (k === 'call' && r.i.qty); });
+
+  // Google map on the Route screen. It needs a Maps key from the server (GOOGLE_MAPS_API_KEY); without one the
+  // Route screen draws a straight-line sketch of the pinned houses and still opens directions in Google Maps.
+  const gm = { state: '', el: null, map: null, svc: null, geo: null, sig: '', pos: null, lines: [], marks: [], stops: [] };
+  const mapsKey = () => (auth.cfg && auth.cfg.mapsKey) || '';
+  const mapsOn = () => gm.state === 'ready';
+  function loadMaps() {
+    if (gm.state || !mapsKey() || !navigator.onLine) return;
+    if (window.google && window.google.maps && window.google.maps.Map) { gm.state = 'ready'; return; }
+    gm.state = 'loading';
+    window.__lwMaps = () => { gm.state = 'ready'; render(); };
+    window.gm_authFailure = () => { gm.state = 'failed'; gm.sig = ''; render(); };
+    loadScript('https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(mapsKey()) + '&v=weekly&loading=async&callback=__lwMaps')
+      .catch(() => { gm.state = 'failed'; render(); });
+  }
+  const gLoc = (o) => (hasGeo(o) ? { lat: o.geo.lat, lng: o.geo.lng } : placeOf(o));
+  const STOPCOL = { pending: '#2E3336', done: '#1E8A3C', call: '#1E8A3C' };
+  function dot(color, scale) {
+    return { path: google.maps.SymbolPath.CIRCLE, scale, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 };
+  }
+  function placeMarks() {
+    gm.marks.forEach((m) => m.setMap(null));
+    gm.marks = [];
+    if (!gm.pos) return;
+    const next = gm.stops.findIndex((s) => s.kind === 'pending');
+    gm.pos.forEach((p, i) => {
+      if (!p) return;
+      if (i === 0 && gm.hasStart) { gm.marks.push(new google.maps.Marker({ map: gm.map, position: p, icon: dot('#C9BDB1', 12), title: t('startAddr'), zIndex: 1 })); return; }
+      const k = gm.hasStart ? i - 1 : i, s = gm.stops[k];
+      gm.marks.push(new google.maps.Marker({
+        map: gm.map, position: p, title: s.name, zIndex: 10 + (k === next ? 100 : 0),
+        icon: dot(k === next ? '#C47F00' : STOPCOL[s.kind] || '#2E3336', k === next ? 14 : 11),
+        label: { text: String(k + 1), color: '#fff', fontSize: '12px', fontWeight: '700' }
+      }));
+    });
+  }
+  // Draws the road route through every stop in order. The route is only fetched again when the stops or their order
+  // change, so marking houses on the way does not cost another Directions request.
+  async function drawMap(slot) {
+    if (!gm.el) {
+      gm.el = document.createElement('div'); gm.el.className = 'gmap';
+      gm.map = new google.maps.Map(gm.el, { disableDefaultUI: true, zoomControl: true, gestureHandling: 'cooperative', clickableIcons: false });
+      gm.svc = new google.maps.DirectionsService();
+    }
+    slot.appendChild(gm.el);
+    const start = placeOf(S.vendor);
+    const pts = (start ? [S.vendor] : []).concat(gm.stops.map((s) => s.c));
+    const sig = JSON.stringify(pts.map(placeOf));
+    if (sig === gm.sig) { placeMarks(); return; }
+    gm.sig = sig; gm.hasStart = !!start;
+    gm.lines.forEach((r) => r.setMap(null)); gm.lines = [];
+    gm.pos = pts.map((o) => (hasGeo(o) ? { lat: o.geo.lat, lng: o.geo.lng } : null));
+    let missed = false;
+    // One request covers up to 25 stops in between; longer rounds are drawn in pieces.
+    for (let a = 0; a < pts.length - 1; a += 26) {
+      const b = Math.min(a + 26, pts.length - 1);
+      try {
+        const res = await gm.svc.route({ origin: gLoc(pts[a]), destination: gLoc(pts[b]), waypoints: pts.slice(a + 1, b).map((o) => ({ location: gLoc(o), stopover: true })), travelMode: google.maps.TravelMode.DRIVING });
+        if (gm.sig !== sig) return;
+        gm.lines.push(new google.maps.DirectionsRenderer({ map: gm.map, directions: res, suppressMarkers: true, preserveViewport: true, polylineOptions: { strokeColor: '#2E3336', strokeOpacity: 0.75, strokeWeight: 5 } }));
+        const legs = res.routes[0].legs;
+        gm.pos[a] = gm.pos[a] || legs[0].start_location.toJSON();
+        legs.forEach((l, i) => { gm.pos[a + 1 + i] = gm.pos[a + 1 + i] || l.end_location.toJSON(); });
+      } catch (e) { missed = true; }
+    }
+    if (gm.sig !== sig) return;
+    const bounds = new google.maps.LatLngBounds();
+    gm.pos.forEach((p) => p && bounds.extend(p));
+    if (!bounds.isEmpty()) { gm.map.fitBounds(bounds, 36); if (gm.pos.filter(Boolean).length === 1) gm.map.setZoom(16); }
+    placeMarks();
+    if (missed) toast(t('addrNotFound'));
+  }
+  // Without a Maps key: the pinned houses joined by straight lines, numbered in route order.
+  function sketch(stops) {
+    const pts = (hasGeo(S.vendor) ? [{ g: S.vendor.geo, home: true }] : []).concat(stops.map((s, i) => ({ g: hasGeo(s.c) ? s.c.geo : null, n: i + 1, kind: s.kind, next: s.next })).filter((p) => p.g));
+    if (pts.length < 2) return '';
+    const W = 340, H = 200, pad = 38;
+    const lat0 = pts[0].g.lat * Math.PI / 180;
+    const xy = pts.map((p) => [p.g.lng * Math.cos(lat0), -p.g.lat]);
+    const xs = xy.map((v) => v[0]), ys = xy.map((v) => v[1]);
+    const x0 = Math.min(...xs), y0 = Math.min(...ys);
+    const sc = Math.min((W - 2 * pad) / ((Math.max(...xs) - x0) || 1e-9), (H - 2 * pad) / ((Math.max(...ys) - y0) || 1e-9));
+    const ox = (W - (Math.max(...xs) - x0) * sc) / 2, oy = (H - (Math.max(...ys) - y0) * sc) / 2;
+    const P = xy.map((v) => [ox + (v[0] - x0) * sc, oy + (v[1] - y0) * sc]);
+    // Flats in one building share a spot; spread them in a small ring so every number stays readable.
+    const groups = [];
+    P.forEach((q, i) => { const g = groups.find((x) => Math.hypot(x.c[0] - q[0], x.c[1] - q[1]) < 16); if (g) g.m.push(i); else groups.push({ c: q.slice(), m: [i] }); });
+    groups.forEach((g) => {
+      if (g.m.length < 2) return;
+      const r = Math.max(14, g.m.length * 4.5);
+      g.m.forEach((i, k) => { const a = 2 * Math.PI * k / g.m.length - Math.PI / 2; P[i] = [g.c[0] + r * Math.cos(a), g.c[1] + r * Math.sin(a)]; });
+    });
+    P.forEach((q) => { q[0] = +q[0].toFixed(1); q[1] = +q[1].toFixed(1); });
+    let svg = '<svg class="sketch" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(t('routeMap')) + '"><defs><pattern id="sg" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#E5E0D9" stroke-width="1"/></pattern></defs>' +
+      '<rect width="' + W + '" height="' + H + '" fill="url(#sg)"/><polyline points="' + P.map((p) => p.join(',')).join(' ') + '" fill="none" stroke="#2E3336" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="1 7" opacity=".75"/>';
+    pts.forEach((p, i) => {
+      const [x, y] = P[i];
+      if (p.home) svg += '<g transform="translate(' + (x - 11) + ' ' + (y - 11) + ')"><rect width="22" height="22" rx="6" fill="#C9BDB1" stroke="#fff" stroke-width="2"/><path d="M6 11.5 11 7l5 4.5V16H6z" fill="#2E3336"/></g>';
+      else svg += '<circle cx="' + x + '" cy="' + y + '" r="' + (p.next ? 12 : 10) + '" fill="' + (p.next ? '#C47F00' : STOPCOL[p.kind] || '#2E3336') + '" stroke="#fff" stroke-width="2"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">' + p.n + '</text>';
+    });
+    return svg + '</svg>';
+  }
+  function mapCard(rows) {
+    const stops = mapStops(rows);
+    const nextI = stops.findIndex((r) => r.i.pending);
+    gm.stops = stops.map((r, i) => ({ c: r.c, name: r.c.name, kind: rowKind(r.i), next: i === nextI }));
+    const located = stops.filter((r) => placeOf(r.c)).length;
+    const missing = stops.length - located;
+    const start = placeOf(S.vendor);
+    loadMaps();
+    let box;
+    if (mapsOn() && located) box = '<div id="mapslot" class="mapbox"></div>';
+    else box = sketch(gm.stops) || '<div class="mapempty">' + ic('pin') + '<span>' + esc(t('mapHint')) + '</span></div>';
+    const todo = stops.filter((r) => r.i.pending && placeOf(r.c)).map((r) => r.c);
+    // Directions start from wherever the phone is, through the next houses still to visit.
+    const nav = dirUrl(todo, '');
+    return '<div class="card mapcard"><div class="ctitle">' + ic('route') + '<h2 class="grow">' + esc(t('routeMap')) + '<small>' + stops.length + ' ' + esc(t('stopsN')) +
+      (missing ? ' · ' + missing + ' ' + esc(t('noAddrN')) : '') + '</small></h2><a class="tag lav" href="#/order">' + ic('sort', 'xs') + esc(t('changeOrder')) + '</a></div>' + box +
+      (!start ? '<a class="rowlink" href="#/settings">' + ic('home', 'sm') + '<span class="grow">' + esc(t('noStart')) + '</span>' + ic('next', 'sm') + '</a>' : '') +
+      (nav ? '<a class="btn block" style="margin-top:12px" target="_blank" rel="noopener" href="' + esc(nav) + '">' + ic('nav') + esc(t('startNav')) + '</a>' +
+        '<div class="muted mapnote">' + esc(fill('navNote', { n: Math.min(10, todo.length) })) + '</div>' : '') + '</div>';
+  }
+  function afterRender() {
+    const slot = $('#mapslot');
+    if (slot && mapsOn()) drawMap(slot).catch(() => {});
+  }
+  // With a Maps key, typed addresses get map coordinates once (kept with the customer) so "Best order" can use them.
+  async function geocodeAll(list) {
+    if (!mapsOn()) return;
+    gm.geo = gm.geo || new google.maps.Geocoder();
+    let changed = false;
+    for (const o of list) {
+      const a = String(o.addr || '').trim();
+      if (!a || hasGeo(o)) continue;
+      try {
+        const r = await gm.geo.geocode({ address: a, region: 'in' });
+        const L = r.results[0] && r.results[0].geometry.location;
+        if (L) { o.geo = { lat: +L.lat().toFixed(6), lng: +L.lng().toFixed(6), q: a }; changed = true; }
+      } catch (e) { /* not found: stays at the end */ }
+    }
+    if (changed) save();
+  }
+  // Road-distance order from Google for up to 25 houses; otherwise straight-line distance over the pinned houses.
+  async function optimise(list) {
+    const start = placeOf(S.vendor);
+    if (mapsOn() && start && list.length <= 25 && list.every((c) => placeOf(c))) {
+      try {
+        const res = await new google.maps.DirectionsService().route({ origin: gLoc(S.vendor), destination: gLoc(S.vendor), waypoints: list.map((c) => ({ location: gLoc(c), stopover: true })), optimizeWaypoints: true, travelMode: google.maps.TravelMode.DRIVING });
+        const ord = res.routes[0].waypoint_order;
+        if (ord && ord.length === list.length) return ord.map((i) => list[i]);
+      } catch (e) { /* fall back to straight lines */ }
+    }
+    await geocodeAll([S.vendor].concat(list));
+    return bestOrder(list, hasGeo(S.vendor) ? S.vendor.geo : null);
+  }
+  function viewOrder() {
+    const list = sortRoute(active());
+    const start = placeOf(S.vendor);
+    let html = pageHead(t('routeOrder'), other('routeOrder'), '#/home') +
+      '<div class="card"><a class="rowlink soft" style="margin:0" href="#/settings"><span class="ordhome">' + ic('home', 'sm') + '</span><span class="grow col"><b>' + esc(t('startAddr')) + '</b><span class="muted" style="font-size:14px;font-weight:600">' +
+      esc(S.vendor.addr || (hasGeo(S.vendor) ? t('pinned') : t('noStart'))) + '</span></span>' + ic('next', 'sm') + '</a>' +
+      '<div class="btns"><button class="btn" data-act="bestorder"' + (ui.busy ? ' disabled' : '') + '>' + esc(t('bestOrder')) + '</button><button class="btn soft" data-act="areaorder">' + esc(t('areaOrder')) + '</button></div>' +
+      '<p class="muted" style="font-size:14px;font-weight:600;margin:12px 2px 0">' + esc(t('orderHint')) + '</p></div>';
+    html += '<div class="ordlist">' + list.map((c, i) => {
+      const where = c.addr || (hasGeo(c) ? t('pinned') : '');
+      return '<div class="ordrow"><span class="num">' + (i + 1) + '</span><span class="flat">' + esc(c.flat || initials(c.name)) + '</span><span class="grow col"><b>' + esc(c.name) + '</b>' +
+        '<small class="' + (where ? '' : 'warn') + '">' + (hasGeo(c) && c.geo.q === 'gps' ? ic('pin', 'xs') : '') + esc(where || t('noAddr')) + '</small></span>' +
+        '<button class="iconbtn" data-act="move" data-id="' + c.id + '" data-n="-1" aria-label="' + esc(t('moveUp')) + '"' + (i ? '' : ' disabled') + '>' + ic('up', 'sm') + '</button>' +
+        '<button class="iconbtn" data-act="move" data-id="' + c.id + '" data-n="1" aria-label="' + esc(t('moveDown')) + '"' + (i < list.length - 1 ? '' : ' disabled') + '>' + ic('down', 'sm') + '</button></div>';
+    }).join('') + '</div>';
+    return html;
+  }
+
   // ---------- views ----------
   function viewWelcome() {
     const types = ['milk', 'paper', 'water', 'laundry', 'other'];
@@ -299,7 +539,8 @@
       '<div class="stat"><span class="k">' + ic('can', 'xs') + esc(t('total')) + '</span><div class="v">' + val(total, houses) + '</div><span class="s">' + houses + ' ' + esc(t('houses')) + '</span></div>' +
       '<div class="stat"><span class="k">' + ic('check', 'xs') + esc(t('doneW')) + '</span><div class="v">' + val(done, cnt.done) + '</div><span class="s">' + cnt.done + ' ' + esc(t('houses')) + ' (' + pct + '%)</span></div>' +
       '<div class="stat"><span class="k">' + ic('clock', 'xs') + esc(t('left')) + '</span><div class="v">' + val(total - done, cnt.pending) + '</div><span class="s">' + cnt.pending + ' ' + esc(t('remaining')) + '</span></div></div>' +
-      '<div class="pbar"><span style="width:' + pct + '%"></span></div><div class="pnote"><span>' + esc(cnt.pending ? t('progress') : t('allDone')) + '</span><b>' + pct + '%</b></div></div>';
+      '<div class="pbar"><span style="width:' + pct + '%"></span></div><div class="pnote"><span>' + esc(cnt.pending ? t('progress') : t('allDone')) + '</span><b>' + pct + '%</b></div></div>' +
+      mapCard(rows);
 
     const F = [['', 'all', '', rows.length], ['pending', 'pending', 'var(--muted)', cnt.pending], ['done', 'delivered', 'var(--given)', cnt.done], ['skip', 'skipped', 'var(--skip)', cnt.skip]];
     html += '<div class="chips">' + F.map(([k, lab, dot, n]) => '<button class="chip' + (ui.filter === k ? ' on' : '') + '" data-act="filter" data-val="' + k + '">' +
@@ -308,8 +549,9 @@
     const shown = rows.filter((r) => !ui.filter || rowKind(r.i) === ui.filter || (ui.filter === 'done' && rowKind(r.i) === 'call' && r.i.qty));
     const next = rows.find((r) => r.i.pending);
     let lastSector = null;
+    const byArea = !customOrder();
     shown.forEach((r) => {
-      if (sectors.length > 1 && !ui.sector && (r.c.sector || '') !== lastSector) {
+      if (byArea && sectors.length > 1 && !ui.sector && (r.c.sector || '') !== lastSector) {
         lastSector = r.c.sector || '';
         html += '<div class="secline">' + ic('pin', 'xs') + esc(lastSector || '—') + '</div>';
       }
@@ -380,7 +622,12 @@
       pill = h.pending ? '<span class="spill pending">' + ic('clock', 'xs') + esc(t('pending')) + '</span>' : h.st === 'none' ? '' : statusPill(h);
       body = vis.map((x) => lineBody(c, x.it, x.i, true)).join('');
     }
-    if (isNext && c.phone) body += '<div class="rnote"><span class="grow">' + esc([c.flat, c.sector].filter(Boolean).join(', ')) + '</span><a class="callbtn" href="tel:' + esc(digits(c.phone)) + '">' + ic('phone', 'sm') + esc(t('call')) + '</a></div>';
+    const go = isNext ? dirUrl([c], '') : '';
+    if (isNext && (c.phone || go)) {
+      body += '<div class="rnote"><span class="grow">' + esc(c.addr || [c.flat, c.sector].filter(Boolean).join(', ')) + '</span>' +
+        (go ? '<a class="callbtn" target="_blank" rel="noopener" href="' + esc(go) + '">' + ic('nav', 'sm') + esc(t('directions')) + '</a>' : '') +
+        (c.phone ? '<a class="callbtn" href="tel:' + esc(digits(c.phone)) + '">' + ic('phone', 'sm') + esc(t('call')) + '</a>' : '') + '</div>';
+    }
     const chips = multi ? '<span class="item">' + ic('can', 'xs') + lines(c).length + ' ' + esc(t('itemsN')) + '</span>' : itemChip(vis[0].it, prod(vis[0].it.productId), vis[0].i.demand);
     return '<div class="rcard ' + h.st + (isNext ? ' next' : '') + '"><div class="rtop"><a class="flat" href="#/c/' + c.id + '">' + esc(c.flat || initials(c.name)) + '</a>' +
       '<a class="who" href="#/c/' + c.id + '"><span class="nm"><span>' + esc(c.name) + '</span>' + (isNext ? '<span class="tag amber">' + esc(t('upNext')) + '</span>' : '') + '</span>' +
@@ -421,15 +668,15 @@
     const preset = PRESETS[S.vendor.type] || PRESETS.milk;
     return {
       key: id,
-      f: c ? { name: c.name, phone: c.phone, flat: c.flat, sector: c.sector, opening: c.opening, start: c.start }
-        : { name: '', phone: '', flat: '', sector: ui.sector || '', opening: '', start: todayStr() },
+      f: c ? { name: c.name, phone: c.phone, flat: c.flat, sector: c.sector, addr: c.addr || '', geo: c.geo || null, opening: c.opening, start: c.start }
+        : { name: '', phone: '', flat: '', sector: ui.sector || '', addr: '', geo: null, opening: '', start: todayStr() },
       items: c ? lines(c).map(formItem) : [formItem({ productId: (S.products[0] || {}).id, qty: preset.qty, sched: { type: preset.sched, days: [1, 3, 5] } })]
     };
   }
   // Keeps typed text when the form re-draws after a button tap.
   function snapForm() {
     const F = ui.form; if (!F || !$('#f-name')) return;
-    ['name', 'phone', 'flat', 'sector', 'opening', 'start'].forEach((k) => { const el = $('#f-' + k); if (el) F.f[k] = el.value; });
+    ['name', 'phone', 'flat', 'sector', 'addr', 'opening', 'start'].forEach((k) => { const el = $('#f-' + k); if (el) F.f[k] = el.value; });
     F.items.forEach((x, n) => { const el = $('#f-rate-' + n); if (el) x.rate = el.value; });
   }
   const fld = (icon, fid, lab, val, attrs) => '<div class="field"><label for="' + fid + '">' + lab + '</label><div class="inp">' + ic(icon, 'sm') + '<input id="' + fid + '" value="' + esc(val == null ? '' : val) + '" ' + (attrs || 'autocomplete="off"') + '></div></div>';
@@ -462,6 +709,9 @@
       '<div class="row" style="gap:10px;align-items:flex-end"><div class="grow">' + fld('building', 'f-flat', esc(t('flat')), f.flat) + '</div>' +
       '<div class="grow">' + fld('pin', 'f-sector', esc(t('area')), f.sector, 'list="sectors" autocomplete="off"') + '</div></div>' +
       '<datalist id="sectors">' + sectors.map((x) => '<option value="' + esc(x) + '">').join('') + '</datalist>' +
+      fld('pin', 'f-addr', esc(t('address')) + opt, f.addr, 'autocomplete="street-address" placeholder="' + esc(t('addrPh')) + '"') +
+      '<div class="pinrow">' + (f.geo && f.geo.q === 'gps' ? geoNote({ geo: f.geo }) + '<button type="button" class="linkbtn" data-act="unpincust">' + esc(t('removePin')) + '</button>'
+        : '<button type="button" class="btn soft" data-act="gpscust">' + ic('target', 'sm') + esc(t('pinHere')) + '</button>') + '</div>' +
       (isNew ? fld('cal', 'f-start', esc(t('firstDay')), f.start, 'type="date"') : '') +
       fld('wallet', 'f-opening', esc(t('oldDue')), f.opening, 'type="number" inputmode="decimal" placeholder="0"') + '</div>' +
       '<div class="card"><div class="ctitle">' + ic('truck') + '<h2>' + esc(t('deliverySetup')) + '</h2></div>' +
@@ -518,9 +768,10 @@
     const pays = S.payments.filter((x) => x.cid === c.id).sort((a, z) => z.date.localeCompare(a.date)).slice(0, 3);
     let html = pageHead(t('khata'), S.vendor.name, '#/customers') +
       '<div class="card"><div class="profile"><span class="av big">' + esc(initials(c.name)) + '</span><div class="grow"><h2>' + esc(c.name) + '</h2>' +
-      '<div class="sub">' + esc([c.flat, c.sector].filter(Boolean).join(' · ')) + '</div>' + (c.phone ? '<div class="sub row" style="gap:5px">' + ic('phone', 'xs') + esc(c.phone) + '</div>' : '') + '</div>' +
+      '<div class="sub">' + esc([c.flat, c.sector].filter(Boolean).join(' · ')) + '</div>' + (c.addr ? '<div class="sub row" style="gap:5px">' + ic('pin', 'xs') + esc(c.addr) + '</div>' : '') + (c.phone ? '<div class="sub row" style="gap:5px">' + ic('phone', 'xs') + esc(c.phone) + '</div>' : '') + '</div>' +
       '<a class="iconbtn" href="#/edit/' + c.id + '" aria-label="' + esc(t('editCustomer')) + '">' + ic('edit', 'sm') + '</a></div>' +
-      (c.phone ? '<div class="btns"><a class="btn soft" href="tel:' + esc(digits(c.phone)) + '">' + ic('phone', 'sm') + esc(t('call')) + '</a><a class="btn lav" target="_blank" rel="noopener" href="https://wa.me/' + esc(waPhone(c.phone)) + '">' + ic('chat', 'sm') + 'WhatsApp</a></div>' : '') + '</div>' +
+      (c.phone || placeOf(c) ? '<div class="btns">' + (c.phone ? '<a class="btn soft" href="tel:' + esc(digits(c.phone)) + '">' + ic('phone', 'sm') + esc(t('call')) + '</a><a class="btn lav" target="_blank" rel="noopener" href="https://wa.me/' + esc(waPhone(c.phone)) + '">' + ic('chat', 'sm') + 'WhatsApp</a>' : '') +
+        (placeOf(c) ? '<a class="btn soft" target="_blank" rel="noopener" href="' + esc(dirUrl([c], '')) + '">' + ic('nav', 'sm') + esc(t('directions')) + '</a>' : '') + '</div>' : '') + '</div>' +
       '<div class="hero"><div class="lab">' + esc(t('totalOutstanding')) + ' · ' + esc(other('totalOutstanding')) + '</div><div class="big">' + rupees(Math.max(0, b.due)) + '<small>' + esc(b.due < -0.5 ? rupees(-b.due) + ' ' + t('advance') : t('toPay')) + '</small></div>' +
       '<div class="brk">' + b.lines.map((x) => '<div><span>' + esc((ls.length > 1 ? x.p.name : monthLabel(ym)) + ' · ' + fq(x.qty) + ' ' + x.p.unit + ' × ₹' + fq(x.rate)) + '</span><b>' + rupees(x.amount) + '</b></div>').join('') +
       '<div><span>' + esc(t('oldDueShort')) + '</span><b>' + (b.old < 0 ? '− ' + rupees(-b.old) : rupees(b.old)) + '</b></div><div><span>' + esc(t('paid')) + '</span><b>− ' + rupees(b.paid) + '</b></div></div>' +
@@ -659,6 +910,8 @@
     return html;
   }
 
+  const startPin = () => (hasGeo(S.vendor) && S.vendor.geo.q === 'gps' ? geoNote(S.vendor) + '<button type="button" class="linkbtn" data-act="unpinstart">' + esc(t('removePin')) + '</button>'
+    : '<button type="button" class="btn soft" data-act="gpsstart">' + ic('target', 'sm') + esc(t('useGps')) + '</button>');
   function viewSettings() {
     const v = S.vendor;
     const fld = (icon, fid, lab, val, attrs) => '<div class="field"><label for="' + fid + '">' + esc(lab) + '</label><div class="inp">' + ic(icon, 'sm') + '<input id="' + fid + '" value="' + esc(val) + '" ' + (attrs || '') + '></div></div>';
@@ -667,7 +920,10 @@
         '<b style="font-size:17px;word-break:break-all">' + esc(acct.email || acct.phone || acct.name) + '</b><div class="sub">' + live() + '</div></div></div>' +
         '<div class="stack"><button class="btn soft block" data-act="logout">' + esc(t('logout')) + '</button></div></div>' : '') +
       '<div class="card">' + fld('user', 's-name', t('vendorName'), v.name) + fld('phone', 's-phone', t('yourPhone'), v.phone, 'type="tel" inputmode="tel"') +
-      fld('qr', 's-upi', t('upiId'), v.upi, 'autocapitalize="off"') + fld('alert', 's-limit', t('limit'), v.limit, 'type="number" inputmode="numeric"') +
+      fld('qr', 's-upi', t('upiId'), v.upi, 'autocapitalize="off"') + fld('alert', 's-limit', t('limit'), v.limit, 'type="number" inputmode="numeric"') + '</div>' +
+      '<div class="card"><div class="ctitle">' + ic('home') + '<h2 class="grow">' + esc(t('startAddr')) + '<small>' + esc(other('startAddr')) + '</small></h2></div>' +
+      fld('pin', 's-addr', t('address'), v.addr || '', 'autocomplete="street-address" placeholder="' + esc(t('startAddrPh')) + '"') +
+      '<div class="pinrow" id="s-geo">' + startPin() + '</div></div><div class="card">' +
       '<div class="field"><span class="lab">' + esc(t('language')) + '</span><div class="seg"><button type="button" class="' + (v.lang === 'en' ? 'on' : '') + '" data-act="setlang" data-val="en">English</button><button type="button" class="' + (v.lang === 'hi' ? 'on' : '') + '" data-act="setlang" data-val="hi">हिंदी</button></div></div></div>' +
       '<div class="card"><div class="ctitle">' + ic('can') + '<h2 class="grow">' + esc(t('items')) + '</h2><button class="iconbtn round" data-act="addprod" aria-label="' + esc(t('addItem')) + '">' + ic('plus') + '</button></div>' +
       S.products.map((p) => '<div class="prodedit"><input data-prod="' + p.id + '" data-k="name" value="' + esc(p.name) + '" aria-label="' + esc(t('product')) + '">' +
@@ -859,6 +1115,16 @@
       const c = { id, flat, name, sector, phone: '', items: [{ id, productId: p.id, qty, sched: { type, days: [1, 3, 5] }, rate: '' }], opening: rnd() < 0.3 ? 200 : 0, start, pauses: [] };
       S.customers.push(c);
     });
+    // Sample addresses and pins around one neighbourhood, so the route map has something to show.
+    Object.assign(S.vendor, { addr: 'Ramesh Dairy, Paud Road, Kothrud, Pune', geo: { lat: 18.5046, lng: 73.8075, q: 'gps' } });
+    const AREA = { 'Tower B': [18.5081, 73.8122, 'Tower B, Mayur Colony, Kothrud'], 'Gali 1': [18.5019, 73.8128, 'Gali 1, Karve Nagar'], Market: [18.5060, 73.8031, 'Kothrud Market'] };
+    S.customers.forEach((c, i) => {
+      if (c.name === 'Pillai') return;
+      const [lat, lng, where] = AREA[c.sector];
+      const k = c.sector === 'Gali 1' ? (i - 6) * 0.0005 : (i % 6) * 0.00004;
+      c.addr = (c.sector === 'Market' ? 'Shop ' : c.sector === 'Tower B' ? 'Flat ' : 'House ') + c.flat + ', ' + where;
+      c.geo = { lat: +(lat + (c.sector === 'Gali 1' ? k * 0.3 : k)).toFixed(6), lng: +(lng + (c.sector === 'Gali 1' ? k : -k)).toFixed(6), q: 'gps' };
+    });
     S.customers[1].items.push({ id: uid(), productId: pn.id, qty: 0.5, sched: { type: 'days', days: [0, 6] }, rate: '' });
     S.customers[1].items.push({ id: uid(), productId: dh.id, qty: 1, sched: { type: 'demand', days: [] }, rate: '' });
     S.customers[11].items.push({ id: uid(), productId: pn.id, qty: 2, sched: { type: 'daily', days: [] }, rate: '' });
@@ -1030,7 +1296,9 @@
       let c = el.dataset.id ? cust(el.dataset.id) : null;
       if (!c) { c = { id: uid(), start: f.start || todayStr(), pauses: [] }; S.customers.push(c); }
       Object.assign(c, {
-        name, flat: (f.flat || '').trim(), sector: (f.sector || '').trim(), phone: (f.phone || '').trim(), opening: f.opening === '' || f.opening == null ? '' : +f.opening,
+        name, flat: (f.flat || '').trim(), sector: (f.sector || '').trim(), phone: (f.phone || '').trim(), addr: (f.addr || '').trim(),
+        // A GPS pin stays; map coordinates found for an old address are dropped when the address changes.
+        geo: f.geo && (f.geo.q === 'gps' || f.geo.q === (f.addr || '').trim()) ? f.geo : null, opening: f.opening === '' || f.opening == null ? '' : +f.opening,
         items: F.items.map((x, n) => ({ id: x.id || (n === 0 && !c.items ? c.id : uid()), productId: x.pid, qty: x.qty, sched: { type: x.type, days: x.days.slice().sort() }, rate: x.rate === '' || x.rate == null ? '' : +x.rate }))
       });
       ui.form = null;
@@ -1095,9 +1363,34 @@
       if (navigator.clipboard) navigator.clipboard.writeText(box.value).then(() => toast(t('copied')), () => {});
     },
     addprod() { const p = { id: uid(), name: 'Item', unit: 'unit', rate: 10 }; S.products.push(p); save(); render(); rateSheet(p.id); },
+    gpsstart() { getGps((g) => { S.vendor.geo = g; save(); $('#s-geo') ? ($('#s-geo').innerHTML = startPin()) : render(); }); },
+    unpinstart() { S.vendor.geo = null; save(); $('#s-geo').innerHTML = startPin(); },
+    gpscust() { getGps((g) => { if (ui.form) formTap((F) => { F.f.geo = g; }); }); },
+    unpincust() { formTap((F) => { F.f.geo = null; }); },
+    move(el, id) {
+      const list = sortRoute(active());
+      const i = list.findIndex((c) => c.id === id), j = i + +el.dataset.n;
+      if (i < 0 || j < 0 || j >= list.length) return;
+      [list[i], list[j]] = [list[j], list[i]];
+      setOrder(list); save(); render();
+    },
+    async bestorder() {
+      ui.busy = true; render();
+      const out = await optimise(sortRoute(active())).catch(() => null);
+      ui.busy = false;
+      if (!out) { render(); toast(t('needPins')); return; }
+      setOrder(out); save(); render(); toast(t('orderSaved'));
+    },
+    areaorder() {
+      const list = active();
+      list.forEach((c) => { delete c.order; });
+      save(); render(); toast(t('orderSaved'));
+    },
     savesettings() {
       const v = S.vendor;
       v.name = $('#s-name').value.trim() || v.name; v.phone = $('#s-phone').value.trim(); v.upi = $('#s-upi').value.trim(); v.limit = +$('#s-limit').value || 0;
+      v.addr = $('#s-addr').value.trim();
+      if (v.geo && v.geo.q !== 'gps' && v.geo.q !== v.addr) v.geo = null;
       document.querySelectorAll('[data-prod]').forEach((inp) => { const p = S.products.find((x) => x.id === inp.dataset.prod); if (p) p[inp.dataset.k] = inp.dataset.k === 'rate' ? +inp.value || 0 : inp.value.trim(); });
       save(); toast(t('saved')); location.hash = '#/home';
     },
@@ -1364,12 +1657,14 @@
     else if (r === 'money') html = viewBilling();
     else if (r === 'stock') html = viewStock();
     else if (r === 'settings') html = viewSettings();
+    else if (r === 'order') html = viewOrder();
     else html = viewRoute();
     const tabbed = r !== 's' && auth.ready && !auth.loading && (auth.mode === 'local' || !!acct) && !!S.vendor.name && (isRoute(r) || ['customers', 'money', 'stock'].includes(r) || (r === 'edit' && a === 'new'));
     const cur = isRoute(r) ? 'home' : r === 'edit' ? 'edit/new' : r;
     document.body.classList.toggle('has-nav', tabbed);
     document.body.classList.toggle('has-run', tabbed && isRoute(r) && active().length > 0);
     $('#app').innerHTML = html + (tabbed ? tabBar(cur) : '');
+    afterRender();
   }
   let lastRoute = '';
   window.addEventListener('hashchange', () => {
