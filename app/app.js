@@ -84,59 +84,90 @@
   // ---------- ledger rules ----------
   const prod = (id) => S.products.find((p) => p.id === id) || S.products[0] || { name: '?', unit: '', rate: 0 };
   const cust = (id) => S.customers.find((c) => c.id === id);
-  const rateOf = (c) => (c.rate != null && c.rate !== '' ? +c.rate : +prod(c.productId).rate || 0);
+  // A customer takes one or more items ("lines"), each with its own quantity, days and rate.
+  // The first line's id is the customer id, so marks saved before lines existed still match it.
+  function lines(c) {
+    if (!c.items || !c.items.length) {
+      c.items = [{ id: c.id, productId: c.productId, qty: c.qty, sched: c.sched || { type: 'daily' }, rate: c.rate == null ? '' : c.rate }];
+      delete c.productId; delete c.qty; delete c.sched; delete c.rate;
+    }
+    return c.items;
+  }
+  const lkey = (c, it) => (it.id === c.id ? c.id : c.id + '.' + it.id);
+  const lineOf = (c, lid) => lines(c).find((x) => x.id === lid) || lines(c)[0];
+  const rateOf = (it) => (it.rate != null && it.rate !== '' ? +it.rate : +prod(it.productId).rate || 0);
   const pauseOn = (c, day) => (c.pauses || []).find((p) => p.from <= day && day <= p.to);
-  function isScheduled(c, day) {
-    const s = c.sched || { type: 'daily' };
+  function isScheduled(c, it, day) {
+    const s = it.sched || { type: 'daily' };
     if (s.type === 'daily') return true;
     if (s.type === 'alt') return ((diffDays(c.start || day, day) % 2) + 2) % 2 === 0;
     if (s.type === 'days') return (s.days || []).includes(parse(day).getDay());
     return false;
   }
-  // st: done | half | skip | extra | away | none ; qty in product units
-  function dayInfo(c, day) {
+  // st: done | half | skip | extra | away | none ; qty in the item's unit
+  function lineInfo(c, it, day) {
     if (c.start && day < c.start) return { st: 'none', qty: 0 };
     const p = pauseOn(c, day);
     if (p) return { st: 'away', qty: 0, till: p.to };
-    const m = (S.marks[day] || {})[c.id];
-    if ((c.sched || {}).type === 'demand') {
+    const m = (S.marks[day] || {})[lkey(c, it)];
+    if ((it.sched || {}).type === 'demand') {
       return m && m.x > 0 ? { st: 'done', qty: +m.x, demand: true } : { st: 'none', qty: 0, demand: true };
     }
-    if (!isScheduled(c, day)) return m && m.s === 'extra' ? { st: 'extra', qty: +(m.x || 1) } : { st: 'none', qty: 0 };
+    if (!isScheduled(c, it, day)) return m && m.s === 'extra' ? { st: 'extra', qty: +(m.x || 1) } : { st: 'none', qty: 0 };
     const st = (m && m.s) || 'done';
-    const q = +c.qty || 0;
+    const q = +it.qty || 0;
     const qty = st === 'done' ? q : st === 'half' ? q / 2 : st === 'skip' ? 0 : q + +(m.x || 1);
     return { st, qty };
   }
-  function setMark(cid, day, mark) {
+  // The whole house for one day: amt is the money charged; st sums up all its items.
+  function dayInfo(c, day) {
+    const ls = lines(c).map((it) => ({ it, i: lineInfo(c, it, day) }));
+    const amt = ls.reduce((a, x) => a + x.i.qty * rateOf(x.it), 0);
+    if (ls.length === 1) return Object.assign({}, ls[0].i, { amt });
+    const sts = ls.map((x) => x.i.st).filter((v) => v !== 'none');
+    let st = 'done';
+    if (sts.includes('away')) st = 'away';
+    else if (!sts.length) st = 'none';
+    else if (sts.every((v) => v === 'skip')) st = 'skip';
+    else if (sts.includes('extra')) st = 'extra';
+    else if (sts.includes('half') || sts.includes('skip')) st = 'half';
+    return { st, qty: ls.reduce((a, x) => a + x.i.qty, 0), amt, till: (ls[0].i || {}).till };
+  }
+  function setMark(key, day, mark) {
     S.marks[day] = S.marks[day] || {};
-    if (mark) S.marks[day][cid] = mark; else delete S.marks[day][cid];
+    if (mark) S.marks[day][key] = mark; else delete S.marks[day][key];
     if (!Object.keys(S.marks[day]).length) delete S.marks[day];
   }
-  function usedBetween(c, from, to) {
-    let qty = 0;
-    if (from > to) return 0;
-    for (let d = from; d <= to; d = addDays(d, 1)) qty += dayInfo(c, d).qty;
-    return qty;
+  function chargedBetween(c, from, to) {
+    let amt = 0;
+    for (let d = from; d <= to; d = addDays(d, 1)) amt += dayInfo(c, d).amt;
+    return amt;
   }
   const paidBetween = (c, from, to) => S.payments.filter((p) => p.cid === c.id && p.date >= from && p.date <= to).reduce((a, p) => a + +p.amt, 0);
   function balance(c, upTo) {
     const from = c.start || upTo;
-    return (+c.opening || 0) + usedBetween(c, from, upTo) * rateOf(c) - S.payments.filter((p) => p.cid === c.id && p.date <= upTo).reduce((a, p) => a + +p.amt, 0);
+    return (+c.opening || 0) + chargedBetween(c, from, upTo) - S.payments.filter((p) => p.cid === c.id && p.date <= upTo).reduce((a, p) => a + +p.amt, 0);
   }
   function monthBill(c, ym) {
     const first = monthStart(ym), today = todayStr();
     const last = monthEnd(ym) < today ? monthEnd(ym) : today;
     const old = balance(c, addDays(first, -1));
-    const qty = usedBetween(c, first < (c.start || first) ? c.start : first, last);
-    const amount = qty * rateOf(c);
+    const from = first < (c.start || first) ? c.start : first;
+    const ls = lines(c).map((it) => {
+      let qty = 0;
+      for (let d = from; d <= last; d = addDays(d, 1)) qty += lineInfo(c, it, d).qty;
+      return { it, p: prod(it.productId), qty, rate: rateOf(it), amount: qty * rateOf(it) };
+    });
+    const amount = ls.reduce((a, x) => a + x.amount, 0);
     const paid = paidBetween(c, first, monthEnd(ym));
-    return { old, qty, amount, paid, due: old + amount - paid };
+    return { old, lines: ls, qty: ls[0].qty, amount, paid, due: old + amount - paid };
   }
   const active = () => S.customers.filter((c) => !c.deleted);
   function sortRoute(list) {
     return list.slice().sort((a, b) => (a.sector || '').localeCompare(b.sector || '') || (a.flat || '').localeCompare(b.flat || '', undefined, { numeric: true }) || a.name.localeCompare(b.name));
   }
+
+  S.customers.forEach(lines);
 
   // ---------- UI state ----------
   const ui = { day: todayStr(), sector: '', q: '', stockDay: 'today', filter: '', edit: null };
@@ -184,27 +215,29 @@
     return s;
   }
   const monthLabel = (ym) => parse(monthStart(ym)).toLocaleDateString(locale(), { month: 'long', year: 'numeric' });
-  function qtyText(c) {
-    const p = prod(c.productId);
-    if ((c.sched || {}).type === 'demand') return p.name + ' · ' + t('onCall');
-    return fq(c.qty) + ' ' + p.unit + ' ' + p.name;
+  function lineText(it) {
+    const p = prod(it.productId);
+    if ((it.sched || {}).type === 'demand') return p.name + ' · ' + t('onCall');
+    return fq(it.qty) + ' ' + p.unit + ' ' + p.name;
   }
-  function schedLabel(c) {
-    const s = c.sched || {};
-    return t({ daily: 'daily', alt: 'alternate', days: 'pickDays', demand: 'onCall' }[s.type] || 'daily');
-  }
+  const qtyText = (c) => lines(c).map(lineText).join(' + ');
+  const schedLabel = (it) => t({ daily: 'daily', alt: 'alternate', days: 'pickDays', demand: 'onCall' }[(it.sched || {}).type] || 'daily');
   // One unit for the route totals when every item uses the same one (litres for a dairy); otherwise totals count houses.
   function mainUnit() {
-    const units = [...new Set(active().map((c) => prod(c.productId).unit))];
+    const units = [...new Set(active().flatMap((c) => lines(c).map((it) => prod(it.productId).unit)))];
     return units.length === 1 ? units[0] : '';
   }
   const stepOf = (unit) => (unit === 'L' ? 0.5 : 1);
-  // A scheduled day stays "pending" on the route until the vendor confirms it. Bills still count it as delivered.
-  function rowState(c, day) {
-    const i = dayInfo(c, day);
-    const m = (S.marks[day] || {})[c.id];
-    i.pending = !m && !i.demand && i.st === 'done' && day >= todayStr();
-    return i;
+  // A scheduled item stays "pending" on the route until the vendor confirms it. Bills still count it as delivered.
+  function houseState(c, day) {
+    const h = dayInfo(c, day);
+    h.ls = lines(c).map((it) => {
+      const i = lineInfo(c, it, day);
+      i.pending = !(S.marks[day] || {})[lkey(c, it)] && !i.demand && i.st === 'done' && day >= todayStr();
+      return { it, i };
+    });
+    h.pending = h.ls.some((x) => x.i.pending);
+    return h;
   }
   const rowKind = (i) => (i.pending ? 'pending' : i.st === 'skip' || i.st === 'away' ? 'skip' : i.st === 'none' ? 'call' : 'done');
   const WD = () => (S.vendor.lang === 'hi' ? ['र', 'सो', 'मं', 'बु', 'गु', 'शु', 'श'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S']);
@@ -226,12 +259,12 @@
     const all = sortRoute(active());
     const sectors = [...new Set(all.map((c) => c.sector || '').filter(Boolean))];
     if (ui.sector && !sectors.includes(ui.sector)) ui.sector = '';
-    const rows = all.filter((c) => !ui.sector || c.sector === ui.sector).map((c) => ({ c, i: rowState(c, day) })).filter((r) => r.i.st !== 'none' || r.i.demand);
+    const rows = all.filter((c) => !ui.sector || c.sector === ui.sector).map((c) => ({ c, i: houseState(c, day) })).filter((r) => r.i.st !== 'none' || r.i.ls.some((x) => x.i.demand));
     const cnt = { pending: 0, done: 0, skip: 0, call: 0 };
     rows.forEach((r) => cnt[rowKind(r.i)]++);
     const u = mainUnit();
     let total = 0, done = 0;
-    rows.forEach((r) => { total += r.i.qty; if (!r.i.pending) done += r.i.qty; });
+    rows.forEach((r) => r.i.ls.forEach((x) => { total += x.i.qty; if (!x.i.pending) done += x.i.qty; }));
     const houses = cnt.done + cnt.pending;
     const pct = houses ? Math.round(100 * cnt.done / houses) : 0;
     const val = (q, h) => (u ? fq(q) + '<small>' + esc(u) + '</small>' : h + '<small>' + esc(t('houses')) + '</small>');
@@ -289,43 +322,59 @@
     if (i.st === 'extra') return '<span class="spill extra">' + ic('plus', 'xs') + esc(t('extra')) + '</span>';
     return '<span class="spill done">' + ic('check', 'xs') + esc(t('delivered')) + '</span>';
   }
-  function rowNote(c, i, p) {
+  function rowNote(it, i, p) {
     if (i.st === 'skip') return t('notGiven');
     if (i.st === 'half') return t('half') + ' · ' + fq(i.qty) + ' ' + p.unit;
-    if (i.st === 'extra') return t('delivered') + ' ' + fq(i.qty) + ' ' + p.unit + ' (+' + fq(i.qty - c.qty) + ' ' + t('extra') + ')';
+    if (i.st === 'extra') return t('delivered') + ' ' + fq(i.qty) + ' ' + p.unit + ' (+' + fq(i.qty - (+it.qty || 0)) + ' ' + t('extra') + ')';
     return t('delivered') + ' ' + fq(i.qty) + ' ' + p.unit;
   }
-  function rowActions(c, p) {
+  function rowActions(it, p, d) {
     const step = stepOf(p.unit);
-    return '<div class="acts"><button class="deliver" data-act="mark" data-s="done" data-id="' + c.id + '"><span class="q">' + ic('check') + fq(c.qty) + ' ' + esc(p.unit) + '</span><small>' + esc(t('delivered')) + '</small></button>' +
-      '<button class="xtra" data-act="mark" data-s="extra" data-id="' + c.id + '">+' + fq(step) + ' ' + esc(p.unit) + '<small>' + esc(t('extra')) + '</small></button>' +
-      '<button class="half" data-act="mark" data-s="half" data-id="' + c.id + '">½<small>' + esc(t('half')) + '</small></button>' +
-      '<button class="skipc" data-act="mark" data-s="skip" data-id="' + c.id + '">' + ic('ban') + '<small>' + esc(t('skip')) + '</small></button></div>';
+    return '<div class="acts"><button class="deliver" data-act="mark" data-s="done"' + d + '><span class="q">' + ic('check') + fq(it.qty) + ' ' + esc(p.unit) + '</span><small>' + esc(t('delivered')) + '</small></button>' +
+      '<button class="xtra" data-act="mark" data-s="extra"' + d + '>+' + fq(step) + ' ' + esc(p.unit) + '<small>' + esc(t('extra')) + '</small></button>' +
+      '<button class="half" data-act="mark" data-s="half"' + d + '>½<small>' + esc(t('half')) + '</small></button>' +
+      '<button class="skipc" data-act="mark" data-s="skip"' + d + '>' + ic('ban') + '<small>' + esc(t('skip')) + '</small></button></div>';
   }
-  function routeRow(c, i, isNext) {
-    const p = prod(c.productId);
-    const bal = balance(c, todayStr());
-    const open = ui.edit === c.id;
+  const itemChip = (it, p, demand) => '<span class="item">' + ic(p.unit === 'L' ? 'drop' : 'can', 'xs') + esc(p.name) + (demand ? '' : ' • ' + fq(it.qty) + ' ' + esc(p.unit)) + '</span>';
+  // Buttons for one item of a house; a house with several items shows one block per item.
+  function lineBody(c, it, i, multi) {
+    const p = prod(it.productId);
+    const open = ui.edit === lkey(c, it);
+    const d = ' data-id="' + c.id + '" data-line="' + it.id + '"';
     let pill, body;
-    if (i.st === 'away') {
-      pill = '<span class="spill away">' + ic('pause', 'xs') + esc(t('onVacation')) + '</span>';
-      body = '<div class="rnote amber">' + ic('info', 'sm') + '<span class="grow">' + esc(fill('pausedUntil', { d: dshort(i.till) })) + '</span><button class="linkbtn" data-act="resume" data-id="' + c.id + '">' + esc(t('resumeToday')) + '</button></div>';
-    } else if (i.demand) {
+    if (i.demand) {
       pill = i.qty ? '<span class="spill done">' + ic('check', 'xs') + fq(i.qty) + ' ' + esc(p.unit) + '</span>' : '<span class="spill pending">' + ic('phone', 'xs') + esc(t('onCall')) + '</span>';
-      body = '<div class="acts"><button class="deliver" data-act="give" data-id="' + c.id + '"><span class="q">' + ic('plus') + '1 ' + esc(p.unit) + '</span><small>' + esc(t('given')) + '</small></button>' +
-        (i.qty ? '<button class="skipc" data-act="clear" data-id="' + c.id + '" aria-label="' + esc(t('undo')) + '">' + ic('close') + '<small>' + esc(t('undo')) + '</small></button>' : '') + '</div>';
+      body = '<div class="acts"><button class="deliver" data-act="give"' + d + '><span class="q">' + ic('plus') + '1 ' + esc(p.unit) + '</span><small>' + esc(t('given')) + '</small></button>' +
+        (i.qty ? '<button class="skipc" data-act="clear"' + d + ' aria-label="' + esc(t('undo')) + '">' + ic('close') + '<small>' + esc(t('undo')) + '</small></button>' : '') + '</div>';
     } else if (i.pending) {
       pill = '<span class="spill pending">' + ic('clock', 'xs') + esc(t('pending')) + '</span>';
-      body = rowActions(c, p);
+      body = rowActions(it, p, d);
     } else {
       pill = statusPill(i);
-      body = (open ? rowActions(c, p) : '') + '<div class="rnote">' + ic('info', 'sm') + '<span class="grow">' + esc(rowNote(c, i, p)) + '</span><button class="linkbtn" data-act="change" data-id="' + c.id + '">' + esc(open ? t('close') : t('change')) + '</button></div>';
+      body = (open ? rowActions(it, p, d) : '') + '<div class="rnote">' + ic('info', 'sm') + '<span class="grow">' + esc(rowNote(it, i, p)) + '</span><button class="linkbtn" data-act="change"' + d + '>' + esc(open ? t('close') : t('change')) + '</button></div>';
+    }
+    return multi ? '<div class="line"><div class="lhead">' + itemChip(it, p, i.demand) + pill + '</div>' + body + '</div>' : { pill, body };
+  }
+  function routeRow(c, h, isNext) {
+    const bal = balance(c, todayStr());
+    const multi = lines(c).length > 1;
+    const vis = h.ls.filter((x) => x.i.st !== 'none' || x.i.demand);
+    let pill, body;
+    if (h.st === 'away') {
+      pill = '<span class="spill away">' + ic('pause', 'xs') + esc(t('onVacation')) + '</span>';
+      body = '<div class="rnote amber">' + ic('info', 'sm') + '<span class="grow">' + esc(fill('pausedUntil', { d: dshort(h.till) })) + '</span><button class="linkbtn" data-act="resume" data-id="' + c.id + '">' + esc(t('resumeToday')) + '</button></div>';
+    } else if (!multi) {
+      const r = lineBody(c, vis[0].it, vis[0].i, false);
+      pill = r.pill; body = r.body;
+    } else {
+      pill = h.pending ? '<span class="spill pending">' + ic('clock', 'xs') + esc(t('pending')) + '</span>' : h.st === 'none' ? '' : statusPill(h);
+      body = vis.map((x) => lineBody(c, x.it, x.i, true)).join('');
     }
     if (isNext && c.phone) body += '<div class="rnote"><span class="grow">' + esc([c.flat, c.sector].filter(Boolean).join(', ')) + '</span><a class="callbtn" href="tel:' + esc(digits(c.phone)) + '">' + ic('phone', 'sm') + esc(t('call')) + '</a></div>';
-    return '<div class="rcard ' + i.st + (isNext ? ' next' : '') + '"><div class="rtop"><a class="flat" href="#/c/' + c.id + '">' + esc(c.flat || initials(c.name)) + '</a>' +
+    const chips = multi ? '<span class="item">' + ic('can', 'xs') + lines(c).length + ' ' + esc(t('itemsN')) + '</span>' : itemChip(vis[0].it, prod(vis[0].it.productId), vis[0].i.demand);
+    return '<div class="rcard ' + h.st + (isNext ? ' next' : '') + '"><div class="rtop"><a class="flat" href="#/c/' + c.id + '">' + esc(c.flat || initials(c.name)) + '</a>' +
       '<a class="who" href="#/c/' + c.id + '"><span class="nm"><span>' + esc(c.name) + '</span>' + (isNext ? '<span class="tag amber">' + esc(t('upNext')) + '</span>' : '') + '</span>' +
-      '<span class="meta"><span class="item">' + ic('drop', 'xs') + esc(p.name) + (i.demand ? '' : ' • ' + fq(c.qty) + ' ' + esc(p.unit)) + '</span>' +
-      (bal > 0.5 ? '<span class="duechip">+' + rupees(bal) + ' ' + esc(t('due')) + '</span>' : '') + '</span></a>' + pill + '</div>' + body + '</div>';
+      '<span class="meta">' + chips + (bal > 0.5 ? '<span class="duechip">+' + rupees(bal) + ' ' + esc(t('due')) + '</span>' : '') + '</span></a>' + pill + '</div>' + body + '</div>';
   }
 
   function viewCustomers() {
@@ -346,44 +395,71 @@
     return html;
   }
 
-  function estimate(type, days, qty, rate) {
-    const per = { daily: 30, alt: 15, days: days.length * 30 / 7 }[type];
-    return per ? rupees(per * qty * rate) + ' ' + t('perMonth') : '—';
+  function estimate(items) {
+    let total = 0, known = false;
+    items.forEach((x) => {
+      const per = { daily: 30, alt: 15, days: x.days.length * 30 / 7 }[x.type];
+      if (!per) return;
+      known = true;
+      total += per * x.qty * (x.rate === '' || x.rate == null ? +prod(x.pid).rate : +x.rate);
+    });
+    return known ? rupees(total) + ' ' + t('perMonth') : '—';
+  }
+  const formItem = (it) => ({ id: it.id || '', pid: it.productId || (S.products[0] || {}).id, qty: +it.qty || 1, type: (it.sched || {}).type || 'daily', days: ((it.sched || {}).days || [1, 3, 5]).slice(), rate: it.rate == null ? '' : it.rate });
+  function formFrom(id) {
+    const c = id === 'new' ? null : cust(id);
+    const preset = PRESETS[S.vendor.type] || PRESETS.milk;
+    return {
+      key: id,
+      f: c ? { name: c.name, phone: c.phone, flat: c.flat, sector: c.sector, opening: c.opening, start: c.start }
+        : { name: '', phone: '', flat: '', sector: ui.sector || '', opening: '', start: todayStr() },
+      items: c ? lines(c).map(formItem) : [formItem({ productId: (S.products[0] || {}).id, qty: preset.qty, sched: { type: preset.sched, days: [1, 3, 5] } })]
+    };
+  }
+  // Keeps typed text when the form re-draws after a button tap.
+  function snapForm() {
+    const F = ui.form; if (!F || !$('#f-name')) return;
+    ['name', 'phone', 'flat', 'sector', 'opening', 'start'].forEach((k) => { const el = $('#f-' + k); if (el) F.f[k] = el.value; });
+    F.items.forEach((x, n) => { const el = $('#f-rate-' + n); if (el) x.rate = el.value; });
+  }
+  const fld = (icon, fid, lab, val, attrs) => '<div class="field"><label for="' + fid + '">' + lab + '</label><div class="inp">' + ic(icon, 'sm') + '<input id="' + fid + '" value="' + esc(val == null ? '' : val) + '" ' + (attrs || 'autocomplete="off"') + '></div></div>';
+  function itemCard(x, n, count) {
+    const p = prod(x.pid);
+    const d = ' data-i="' + n + '"';
+    const types = [['daily', 'daily'], ['alt', 'alternate'], ['days', 'pickDays'], ['demand', 'onCall']];
+    const presets = p.unit === 'L' ? [0.5, 1, 1.5, 2, 3] : [1, 2, 3, 4, 5];
+    return '<div class="itemcard"><div class="head">' + ic(p.unit === 'L' ? 'drop' : 'can', 'sm') + '<span class="grow">' + esc(t('itemN')) + ' ' + (n + 1) + '</span>' +
+      (count > 1 ? '<button class="iconbtn" data-act="delitem"' + d + ' aria-label="' + esc(t('delete')) + '">' + ic('close', 'sm') + '</button>' : '') + '</div>' +
+      '<div class="field"><div class="pills">' + S.products.map((y) => '<button type="button" class="pill' + (y.id === x.pid ? ' on' : '') + '" data-act="fprod"' + d + ' data-val="' + y.id + '">' + esc(y.name) + ' (₹' + esc(y.rate) + '/' + esc(y.unit) + ')</button>').join('') + '</div></div>' +
+      '<div class="field"><span class="lab">' + esc(t('schedule')) + '</span><div class="seg">' + types.map(([k, lab]) => '<button type="button" class="' + (x.type === k ? 'on' : '') + '" data-act="sched"' + d + ' data-val="' + k + '">' + esc(t(lab)) + '</button>').join('') + '</div>' +
+      (x.type === 'days' ? '<div class="days7">' + WD().map((w, i) => '<button type="button" class="' + (x.days.includes(i) ? 'on' : '') + '" data-act="wday"' + d + ' data-val="' + i + '" aria-pressed="' + x.days.includes(i) + '">' + w + '</button>').join('') + '</div>' : '') + '</div>' +
+      (x.type === 'demand' ? '' : '<div class="field"><span class="lab">' + esc(t('qty')) + '</span><div class="qtybox"><div class="stepper"><button type="button" data-act="qty"' + d + ' data-n="-1" aria-label="Less">−</button>' +
+        '<div class="val"><output>' + fq(x.qty) + '</output><small>' + esc(p.unit) + '</small></div><button type="button" class="plus" data-act="qty"' + d + ' data-n="1" aria-label="More">+</button></div>' +
+        '<div class="presets">' + presets.map((v) => '<button type="button" class="' + (v === x.qty ? 'on' : '') + '" data-act="qtyset"' + d + ' data-val="' + v + '">' + fq(v) + ' ' + esc(p.unit) + '</button>').join('') + '</div></div></div>') +
+      fld('rupee', 'f-rate-' + n, esc(t('rate')), x.rate, 'type="number" inputmode="decimal" data-rate="' + n + '" placeholder="' + esc(p.rate) + '"') + '</div>';
   }
   function viewEdit(id) {
     const isNew = id === 'new';
-    const preset = PRESETS[S.vendor.type] || PRESETS.milk;
-    const c = isNew ? { name: '', flat: '', sector: ui.sector || '', phone: '', productId: (S.products[0] || {}).id, qty: preset.qty, sched: { type: preset.sched, days: [1, 3, 5] }, rate: '', opening: '', start: todayStr() } : cust(id);
-    if (!c) return viewNotFound();
-    ui.form = { type: c.sched.type, days: (c.sched.days || []).slice(), qty: +c.qty || 1, pid: c.productId || (S.products[0] || {}).id };
-    const p = prod(ui.form.pid);
+    if (!isNew && !cust(id)) return viewNotFound();
+    if (!ui.form || ui.form.key !== id) ui.form = formFrom(id);
+    const F = ui.form, f = F.f;
     const sectors = [...new Set(active().map((x) => x.sector).filter(Boolean))];
-    const types = [['daily', 'daily'], ['alt', 'alternate'], ['days', 'pickDays'], ['demand', 'onCall']];
-    const presets = p.unit === 'L' ? [0.5, 1, 1.5, 2, 3] : [1, 2, 3, 4, 5];
-    const fld = (icon, fid, lab, val, attrs) => '<div class="field"><label for="' + fid + '">' + lab + '</label><div class="inp">' + ic(icon, 'sm') + '<input id="' + fid + '" value="' + esc(val) + '" ' + (attrs || 'autocomplete="off"') + '></div></div>';
     const opt = ' <small>' + esc(t('optional')) + '</small>';
-    return pageHead(isNew ? t('addCustomer') : t('editCustomer'), isNew ? other('addCustomer') : c.name, isNew ? '#/home' : '#/c/' + c.id) +
+    return pageHead(isNew ? t('addCustomer') : t('editCustomer'), isNew ? other('addCustomer') : f.name, isNew ? '#/home' : '#/c/' + id) +
       '<div class="card"><div class="ctitle">' + ic('user') + '<h2>' + esc(t('details')) + '</h2></div>' +
-      fld('user', 'f-name', esc(t('name')), c.name) +
-      fld('phone', 'f-phone', esc(t('phone')) + opt, c.phone, 'type="tel" inputmode="tel"') +
-      '<div class="row" style="gap:10px;align-items:flex-end">' + '<div class="grow">' + fld('building', 'f-flat', esc(t('flat')), c.flat) + '</div>' +
-      '<div class="grow">' + fld('pin', 'f-sector', esc(t('area')), c.sector, 'list="sectors" autocomplete="off"') + '</div></div>' +
-      '<datalist id="sectors">' + sectors.map((s) => '<option value="' + esc(s) + '">').join('') + '</datalist></div>' +
+      fld('user', 'f-name', esc(t('name')), f.name) +
+      fld('phone', 'f-phone', esc(t('phone')) + opt, f.phone, 'type="tel" inputmode="tel"') +
+      '<div class="row" style="gap:10px;align-items:flex-end"><div class="grow">' + fld('building', 'f-flat', esc(t('flat')), f.flat) + '</div>' +
+      '<div class="grow">' + fld('pin', 'f-sector', esc(t('area')), f.sector, 'list="sectors" autocomplete="off"') + '</div></div>' +
+      '<datalist id="sectors">' + sectors.map((x) => '<option value="' + esc(x) + '">').join('') + '</datalist>' +
+      (isNew ? fld('cal', 'f-start', esc(t('firstDay')), f.start, 'type="date"') : '') +
+      fld('wallet', 'f-opening', esc(t('oldDue')), f.opening, 'type="number" inputmode="decimal" placeholder="0"') + '</div>' +
       '<div class="card"><div class="ctitle">' + ic('truck') + '<h2>' + esc(t('deliverySetup')) + '</h2></div>' +
-      '<div class="field"><span class="lab">' + esc(t('product')) + '</span><div class="pills" id="f-prod">' +
-      S.products.map((x) => '<button type="button" class="pill' + (x.id === ui.form.pid ? ' on' : '') + '" data-act="fprod" data-val="' + x.id + '">' + ic(x.unit === 'L' ? 'drop' : 'can', 'xs') + esc(x.name) + ' (₹' + esc(x.rate) + '/' + esc(x.unit) + ')</button>').join('') + '</div></div>' +
-      '<div class="field"><span class="lab">' + esc(t('schedule')) + '</span><div class="seg" id="f-sched">' +
-      types.map(([k, lab]) => '<button type="button" class="' + (ui.form.type === k ? 'on' : '') + '" data-act="sched" data-val="' + k + '">' + esc(t(lab)) + '</button>').join('') + '</div>' +
-      '<div class="days7' + (ui.form.type === 'days' ? '' : ' hidden') + '" id="daysbox">' + WD().map((w, i) => '<button type="button" class="' + (ui.form.days.includes(i) ? 'on' : '') + '" data-act="wday" data-val="' + i + '" aria-pressed="' + ui.form.days.includes(i) + '">' + w + '</button>').join('') + '</div></div>' +
-      '<div class="field' + (ui.form.type === 'demand' ? ' hidden' : '') + '" id="qtybox"><span class="lab">' + esc(t('qty')) + '</span><div class="qtybox"><div class="stepper"><button type="button" data-act="qty" data-n="-1" aria-label="Less">−</button>' +
-      '<div class="val"><output id="f-qty">' + fq(ui.form.qty) + '</output><small id="f-unit">' + esc(p.unit) + '</small></div><button type="button" class="plus" data-act="qty" data-n="1" aria-label="More">+</button></div>' +
-      '<div class="presets" id="presets">' + presets.map((v) => '<button type="button" class="' + (v === ui.form.qty ? 'on' : '') + '" data-act="qtyset" data-val="' + v + '">' + fq(v) + ' ' + esc(p.unit) + '</button>').join('') + '</div></div></div>' +
-      (isNew ? fld('cal', 'f-start', esc(t('firstDay')), c.start, 'type="date"') : '') +
-      '<div class="row" style="gap:10px;align-items:flex-end"><div class="grow">' + fld('rupee', 'f-rate', esc(t('rate')), c.rate, 'type="number" inputmode="decimal" placeholder="' + esc(p.rate) + '"') + '</div>' +
-      '<div class="grow">' + fld('wallet', 'f-open', esc(t('oldDue')), c.opening, 'type="number" inputmode="decimal" placeholder="0"') + '</div></div></div>' +
-      '<div class="est"><span>' + esc(t('estMonthly')) + '</span><b id="f-est">' + esc(estimate(ui.form.type, ui.form.days, ui.form.qty, c.rate !== '' && c.rate != null ? +c.rate : +p.rate)) + '</b></div>' +
-      '<button class="btn big block" data-act="savecust" data-id="' + (isNew ? '' : c.id) + '">' + ic('check') + esc(t('save')) + '</button>' +
-      (isNew ? '' : '<div class="stack"><button class="btn red block" data-act="delcust" data-id="' + c.id + '">' + esc(t('delete')) + '</button></div>');
+      F.items.map((x, n) => itemCard(x, n, F.items.length)).join('') +
+      '<button class="btn line block" style="margin-top:14px" data-act="additem">' + ic('plus') + esc(t('addAnother')) + '</button></div>' +
+      '<div class="est"><span>' + esc(t('estMonthly')) + '</span><b id="f-est">' + esc(estimate(F.items)) + '</b></div>' +
+      '<button class="btn big block" data-act="savecust" data-id="' + (isNew ? '' : id) + '">' + ic('check') + esc(t('save')) + '</button>' +
+      (isNew ? '' : '<div class="stack"><button class="btn red block" data-act="delcust" data-id="' + id + '">' + esc(t('delete')) + '</button></div>');
   }
 
   function calendarHtml(cells, interactive) {
@@ -424,10 +500,10 @@
     ym = ym || monthOf(todayStr());
     ui.month = ym;
     const today = todayStr();
-    const p = prod(c.productId);
+    const ls = lines(c);
+    const single = ls.length === 1 ? prod(ls[0].productId) : null;
     const { cells, counts } = monthCells(c, ym);
     const b = monthBill(c, ym);
-    const s = c.sched || { type: 'daily' };
     const pz = (c.pauses || []).filter((x) => x.to >= today).sort((a, z) => a.from.localeCompare(z.from))[0];
     const pays = S.payments.filter((x) => x.cid === c.id).sort((a, z) => z.date.localeCompare(a.date)).slice(0, 3);
     let html = pageHead(t('khata'), S.vendor.name, '#/customers') +
@@ -436,17 +512,18 @@
       '<a class="iconbtn" href="#/edit/' + c.id + '" aria-label="' + esc(t('editCustomer')) + '">' + ic('edit', 'sm') + '</a></div>' +
       (c.phone ? '<div class="btns"><a class="btn soft" href="tel:' + esc(digits(c.phone)) + '">' + ic('phone', 'sm') + esc(t('call')) + '</a><a class="btn lav" target="_blank" rel="noopener" href="https://wa.me/' + esc(waPhone(c.phone)) + '">' + ic('chat', 'sm') + 'WhatsApp</a></div>' : '') + '</div>' +
       '<div class="hero"><div class="lab">' + esc(t('totalOutstanding')) + ' · ' + esc(other('totalOutstanding')) + '</div><div class="big">' + rupees(Math.max(0, b.due)) + '<small>' + esc(b.due < -0.5 ? rupees(-b.due) + ' ' + t('advance') : t('toPay')) + '</small></div>' +
-      '<div class="brk"><div><span>' + esc(monthLabel(ym)) + ' · ' + fq(b.qty) + ' ' + esc(p.unit) + ' × ₹' + fq(rateOf(c)) + '</span><b>' + rupees(b.amount) + '</b></div>' +
+      '<div class="brk">' + b.lines.map((x) => '<div><span>' + esc((ls.length > 1 ? x.p.name : monthLabel(ym)) + ' · ' + fq(x.qty) + ' ' + x.p.unit + ' × ₹' + fq(x.rate)) + '</span><b>' + rupees(x.amount) + '</b></div>').join('') +
       '<div><span>' + esc(t('oldDueShort')) + '</span><b>' + (b.old < 0 ? '− ' + rupees(-b.old) : rupees(b.old)) + '</b></div><div><span>' + esc(t('paid')) + '</span><b>− ' + rupees(b.paid) + '</b></div></div>' +
       '<div class="stack"><button class="btn white" data-act="pay" data-id="' + c.id + '">' + ic('wallet') + esc(t('collect')) + '</button>' +
       '<a class="btn lav" target="_blank" rel="noopener" href="' + esc(waLink(c.phone, billText(c, ym))) + '">' + ic('chat') + esc(t('sendWhatsApp')) + '</a></div></div>';
 
-    html += '<div class="card"><div class="ctitle">' + ic('can') + '<h2 class="grow">' + esc(t('subscription')) + '<small>' + esc(other('subscription')) + '</small></h2><span class="tag lav">' + esc(schedLabel(c)) + '</span></div>' +
-      '<div class="sub-item"><span class="ic">' + ic(p.unit === 'L' ? 'drop' : 'can') + '</span><div class="grow"><b style="font-size:17px">' + esc(p.name) + '</b><div class="muted" style="font-size:14px;font-weight:600">₹' + fq(rateOf(c)) + ' / ' + esc(p.unit) + '</div></div>' +
-      '<div class="q">' + (s.type === 'demand' ? '—' : fq(c.qty) + ' ' + esc(p.unit)) + '<small>' + esc(schedLabel(c)) + '</small></div></div>';
-    if (s.type === 'daily' || s.type === 'days') {
-      html += '<div class="lbl">' + esc(t('weekSchedule')) + '</div><div class="wk">' + [1, 2, 3, 4, 5, 6, 0].map((d) => '<span class="' + (s.type === 'daily' || (s.days || []).includes(d) ? 'on' : '') + '">' + WD()[d] + '</span>').join('') + '</div>';
-    }
+    html += '<div class="card"><div class="ctitle">' + ic('can') + '<h2 class="grow">' + esc(t('subscription')) + '<small>' + esc(other('subscription')) + '</small></h2><a class="tag lav" href="#/edit/' + c.id + '">' + ic('plus', 'xs') + esc(t('addItem')) + '</a></div>';
+    ls.forEach((it, n) => {
+      const p = prod(it.productId); const s = it.sched || { type: 'daily' };
+      html += '<div class="sub-item"' + (n ? ' style="margin-top:10px"' : '') + '><span class="ic">' + ic(p.unit === 'L' ? 'drop' : 'can') + '</span><div class="grow"><b style="font-size:17px">' + esc(p.name) + '</b><div class="muted" style="font-size:14px;font-weight:600">₹' + fq(rateOf(it)) + ' / ' + esc(p.unit) + '</div></div>' +
+        '<div class="q">' + (s.type === 'demand' ? '—' : fq(it.qty) + ' ' + esc(p.unit)) + '<small>' + esc(schedLabel(it)) + '</small></div></div>';
+      if (s.type === 'days') html += '<div class="wk" style="margin-top:8px">' + [1, 2, 3, 4, 5, 6, 0].map((d) => '<span class="' + ((s.days || []).includes(d) ? 'on' : '') + '">' + WD()[d] + '</span>').join('') + '</div>';
+    });
     html += '<button class="rowlink" data-act="pausesheet" data-id="' + c.id + '">' + ic('pause') + '<span class="grow">' + esc(pz ? dshort(pz.from) + ' – ' + dshort(pz.to) + ' · ' + t('onVacation') : t('pauseDelivery')) + '</span>' + ic('next', 'sm') + '</button></div>';
 
     html += '<div class="card"><div class="ctitle"><h2 class="grow">' + esc(t('dailyLog')) + '<small>' + esc(other('dailyLog')) + '</small></h2></div><div class="log">';
@@ -457,7 +534,7 @@
       const tag = i.st === 'none' ? t('noDelivery') : t(LOOK[i.st].w);
       html += '<button class="logrow ' + i.st + (k === 0 ? ' today' : '') + '" data-act="cycleday" data-day="' + day + '"><span class="dn">' + +day.slice(8) + '</span>' +
         '<span class="grow col"><span class="dt">' + esc(parse(day).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })) + '</span><span><span class="tag ' + LOGTAG[i.st] + '">' + esc(tag) + '</span></span></span>' +
-        '<span class="qq">' + fq(i.qty) + ' ' + esc(p.unit) + '<small>' + rupees(i.qty * rateOf(c)) + '</small></span></button>';
+        '<span class="qq">' + (single ? fq(i.qty) + ' ' + esc(single.unit) : rupees(i.amt)) + '<small>' + (single ? rupees(i.amt) : '') + '</small></span></button>';
     }
     html += '</div></div>';
 
@@ -514,7 +591,7 @@
 
     html += '<div class="sectionh"><div><h2>' + esc(t('rates')) + '</h2><small>' + esc(other('rates')) + '</small></div><button class="iconbtn round" data-act="addprod" aria-label="' + esc(t('addItem')) + '">' + ic('plus') + '</button></div>';
     S.products.forEach((x) => {
-      const homes = list.filter((c) => c.productId === x.id).length;
+      const homes = list.filter((c) => lines(c).some((it) => it.productId === x.id)).length;
       html += '<div class="prow"><span class="ic">' + ic(x.unit === 'L' ? 'drop' : 'can') + '</span><div class="grow"><b>' + esc(x.name) + '</b><div class="muted" style="font-size:13px;font-weight:600">' + homes + ' ' + esc(t('activeHomes')) + '</div>' +
         '<div class="r">₹' + esc(x.rate) + ' / ' + esc(x.unit) + '</div></div><button class="editrate" data-act="ratesheet" data-id="' + x.id + '">' + ic('edit', 'xs') + esc(t('editRate')) + '</button></div>';
     });
@@ -526,13 +603,18 @@
     const per = {};
     let extra = 0, away = 0, awayHouses = 0, extraHouses = 0;
     active().forEach((c) => {
-      const i = dayInfo(c, day);
-      const p = prod(c.productId);
-      const k = p.id || p.name;
-      per[k] = per[k] || { p, qty: 0 };
-      per[k].qty += i.qty;
-      if (i.st === 'extra') { extra += i.qty - c.qty; extraHouses++; }
-      if (i.st === 'away' && (c.sched || {}).type !== 'demand' && isScheduled(c, day)) { away += +c.qty; awayHouses++; }
+      let ex = false, aw = false;
+      lines(c).forEach((it) => {
+        const i = lineInfo(c, it, day);
+        const p = prod(it.productId);
+        const k = p.id || p.name;
+        per[k] = per[k] || { p, qty: 0 };
+        per[k].qty += i.qty;
+        if (i.st === 'extra') { extra += i.qty - (isScheduled(c, it, day) ? +it.qty : 0); ex = true; }
+        if (i.st === 'away' && (it.sched || {}).type !== 'demand' && isScheduled(c, it, day)) { away += +it.qty; aw = true; }
+      });
+      if (ex) extraHouses++;
+      if (aw) awayHouses++;
     });
     return { items: Object.values(per).filter((x) => x.qty > 0), extra, away, awayHouses, extraHouses };
   }
@@ -603,10 +685,11 @@
     const upi = d.u ? 'upi://pay?pa=' + encodeURIComponent(d.u) + '&pn=' + encodeURIComponent(d.v) + '&am=' + Math.max(0, Math.round(d.due)) + '&cu=INR&tn=' + encodeURIComponent(d.n + ' ' + monthLabel(ym)) : '';
     const ask = (txt) => 'https://wa.me/' + waPhone(d.vp) + '?text=' + encodeURIComponent(txt);
     document.title = d.v + ' · ' + d.n;
+    const rows = d.l || [[d.p, d.un, d.q, d.r, d.a]];
     return '<div class="pub"><header class="apphead"><span class="logo">' + ic('can') + '</span><div class="t"><b>' + esc(d.v) + '</b><span>LocalWaallah · ' + esc(t('noApp')) + '</span></div>' + langBtn() + '</header>' +
-      '<div class="card"><div class="profile"><span class="av big">' + esc(initials(d.n)) + '</span><div class="grow"><h2>' + esc(d.n) + '</h2><div class="sub">' + esc([d.f, d.p].filter(Boolean).join(' · ')) + '</div></div></div></div>' +
+      '<div class="card"><div class="profile"><span class="av big">' + esc(initials(d.n)) + '</span><div class="grow"><h2>' + esc(d.n) + '</h2><div class="sub">' + esc([d.f, rows.map((x) => x[0]).join(', ')].filter(Boolean).join(' · ')) + '</div></div></div></div>' +
       '<div class="hero"><div class="lab">' + esc(t('toPay')) + ' · ' + esc(monthLabel(ym)) + '</div><div class="big">' + rupees(Math.max(0, d.due)) + '</div>' +
-      '<div class="brk"><div><span>' + fq(d.q) + ' ' + esc(d.un) + ' × ₹' + fq(d.r) + '</span><b>' + rupees(d.a) + '</b></div><div><span>' + esc(t('oldDueShort')) + '</span><b>' + rupees(d.o) + '</b></div><div><span>' + esc(t('paid')) + '</span><b>− ' + rupees(d.pd) + '</b></div></div>' +
+      '<div class="brk">' + rows.map((x) => '<div><span>' + esc((rows.length > 1 ? x[0] + ' · ' : '') + fq(x[2]) + ' ' + x[1] + ' × ₹' + fq(x[3])) + '</span><b>' + rupees(x[4]) + '</b></div>').join('') + '<div><span>' + esc(t('oldDueShort')) + '</span><b>' + rupees(d.o) + '</b></div><div><span>' + esc(t('paid')) + '</span><b>− ' + rupees(d.pd) + '</b></div></div>' +
       (upi && d.due > 0 ? '<div class="stack"><a class="btn white" href="' + esc(upi) + '">' + ic('qr') + esc(t('payUpi')) + ' ' + rupees(d.due) + '</a></div>' : '') + '</div>' +
       '<div class="card"><div class="monthnav"><div class="t"><b>' + esc(monthLabel(ym)) + '</b></div></div>' + calendarHtml(cells, false) + legendHtml(counts) + '</div>' +
       (d.vp ? '<div class="btns"><a class="btn line" href="' + esc(ask('Please pause delivery for ' + d.n + ' (' + (d.f || '') + ') from __ to __')) + '">' + ic('pause', 'sm') + esc(t('askPause')) + '</a>' +
@@ -617,27 +700,26 @@
 
   // ---------- links & sharing ----------
   function publicLink(c, ym) {
-    const p = prod(c.productId);
     const b = monthBill(c, ym);
     const { codes } = monthCells(c, ym);
-    const data = { v: S.vendor.name, vp: S.vendor.phone, u: S.vendor.upi, n: c.name, f: c.flat, p: p.name, un: p.unit, r: rateOf(c), m: ym, d: codes, o: Math.round(b.old), a: Math.round(b.amount), pd: Math.round(b.paid), due: Math.round(b.due), q: b.qty };
+    const data = { v: S.vendor.name, vp: S.vendor.phone, u: S.vendor.upi, n: c.name, f: c.flat, m: ym, d: codes, o: Math.round(b.old), a: Math.round(b.amount), pd: Math.round(b.paid), due: Math.round(b.due),
+      l: b.lines.map((x) => [x.p.name, x.p.unit, +fq(x.qty), x.rate, Math.round(x.amount)]) };
     const enc = btoa(unescape(encodeURIComponent(JSON.stringify(data)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     return location.origin + location.pathname + '#/s/' + enc;
   }
   function billText(c, ym) {
-    const p = prod(c.productId);
     const b = monthBill(c, ym);
-    const lines = [
+    const out = [
       'Namaste ' + c.name + ',',
       S.vendor.name + ' · ' + monthLabel(ym),
-      fq(b.qty) + ' ' + p.unit + ' × ₹' + fq(rateOf(c)) + ' = ' + rupees(b.amount),
+      ...b.lines.map((x) => x.p.name + ': ' + fq(x.qty) + ' ' + x.p.unit + ' × ₹' + fq(x.rate) + ' = ' + rupees(x.amount)),
       t('oldDueShort') + ': ' + rupees(b.old),
       t('paid') + ': ' + rupees(b.paid),
       t('toPay') + ': *' + rupees(Math.max(0, b.due)) + '*'
     ];
-    if (S.vendor.upi) lines.push('UPI: ' + S.vendor.upi);
-    lines.push('', publicLink(c, ym));
-    return lines.join('\n');
+    if (S.vendor.upi) out.push('UPI: ' + S.vendor.upi);
+    out.push('', publicLink(c, ym));
+    return out.join('\n');
   }
   const waLink = (phone, text) => 'https://wa.me/' + (phone ? waPhone(phone) : '') + '?text=' + encodeURIComponent(text);
 
@@ -725,18 +807,20 @@
     if (/skip|nahi|nahin|नहीं|नही|मत|band|बंद|no /.test(raw + ' ')) st = 'skip';
     else if (/half|aadha|adha|आधा/.test(raw)) st = 'half';
     else if (/extra|zyada|jyada|ज़्यादा|ज्यादा|और|aur|more|add/.test(raw)) st = 'extra';
+    const it = lines(c).find((y) => raw.includes(prod(y.productId).name.toLowerCase().split(' ')[0])) || lines(c).find((y) => lineInfo(c, y, day).st !== 'none') || lines(c)[0];
+    const key = lkey(c, it);
     let x = 1;
     for (const tk of tokens) {
       if (tk === String(c.flat).toLowerCase()) continue;
       if (/^\d+(\.\d+)?$/.test(tk)) { x = +tk; break; }
       if (numWords[tk]) { x = numWords[tk]; break; }
     }
-    const prev = (S.marks[day] || {})[c.id];
-    if ((c.sched || {}).type === 'demand') setMark(c.id, day, st === 'skip' ? null : { s: 'extra', x });
-    else setMark(c.id, day, st === 'extra' ? { s: 'extra', x } : { s: st });
+    const prev = (S.marks[day] || {})[key];
+    if ((it.sched || {}).type === 'demand') setMark(key, day, st === 'skip' ? null : { s: 'extra', x });
+    else setMark(key, day, st === 'extra' ? { s: 'extra', x } : { s: st });
     save(); render();
-    const i = dayInfo(c, day);
-    toast(t('heard') + ': ' + (c.flat || '') + ' ' + c.name + ' → ' + t(LOOK[i.st].w) + (i.st === 'extra' ? ' +' + fq(x) : ''), () => { setMark(c.id, day, prev || null); save(); render(); });
+    const i = lineInfo(c, it, day);
+    toast(t('heard') + ': ' + (c.flat || '') + ' ' + c.name + ' · ' + prod(it.productId).name + ' → ' + t(LOOK[i.st].w) + (i.st === 'extra' ? ' +' + fq(x) : ''), () => { setMark(key, day, prev || null); save(); render(); });
     return true;
   }
 
@@ -745,9 +829,10 @@
     const today = todayStr();
     const start = monthStart(shiftMonth(monthOf(today), -2));
     const fc = { id: uid(), name: 'Full Cream', unit: 'L', rate: 68 }, tn = { id: uid(), name: 'Toned', unit: 'L', rate: 56 };
+    const pn = { id: uid(), name: 'Paneer', unit: 'kg', rate: 340 }, dh = { id: uid(), name: 'Curd', unit: 'pouch', rate: 40 };
     S = blank();
     Object.assign(S.vendor, { name: 'Ramesh Dairy', phone: '', upi: 'rameshdairy@upi', lang: S.vendor.lang || 'en', type: 'milk', limit: 5000 });
-    S.products = [fc, tn];
+    S.products = [fc, tn, pn, dh];
     const people = [
       ['301', 'Sharma ji', 'Tower B', fc, 1, 'daily'], ['302', 'Mehta family', 'Tower B', tn, 2, 'daily'], ['303', 'Iqbal bhai', 'Tower B', fc, 1, 'daily'],
       ['304', 'Rao madam', 'Tower B', tn, 1, 'alt'], ['305', 'Fernandes', 'Tower B', fc, 1, 'daily'], ['306', 'Gupta ji', 'Tower B', fc, 1, 'daily'],
@@ -757,9 +842,13 @@
     let seed = 7;
     const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
     people.forEach(([flat, name, sector, p, qty, type]) => {
-      const c = { id: uid(), flat, name, sector, phone: '', productId: p.id, qty, sched: { type, days: [1, 3, 5] }, rate: '', opening: rnd() < 0.3 ? 200 : 0, start, pauses: [] };
+      const id = uid();
+      const c = { id, flat, name, sector, phone: '', items: [{ id, productId: p.id, qty, sched: { type, days: [1, 3, 5] }, rate: '' }], opening: rnd() < 0.3 ? 200 : 0, start, pauses: [] };
       S.customers.push(c);
     });
+    S.customers[1].items.push({ id: uid(), productId: pn.id, qty: 0.5, sched: { type: 'days', days: [0, 6] }, rate: '' });
+    S.customers[1].items.push({ id: uid(), productId: dh.id, qty: 1, sched: { type: 'demand', days: [] }, rate: '' });
+    S.customers[11].items.push({ id: uid(), productId: pn.id, qty: 2, sched: { type: 'daily', days: [] }, rate: '' });
     S.customers[5].pauses.push({ from: addDays(today, -1), to: addDays(today, 5) });
     S.customers[1].pauses.push({ from: addDays(today, -40), to: addDays(today, -35) });
     for (let d = start; d <= today; d = addDays(d, 1)) {
@@ -794,24 +883,27 @@
     if (H) { e.preventDefault(); H(el, id); }
   });
   const onlyOn = (el) => el.parentNode.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el));
-  function markToast(c, day, prev) {
-    const i = dayInfo(c, day);
-    const p = prod(c.productId);
+  function markToast(c, it, day, prev) {
+    const i = lineInfo(c, it, day);
+    const p = prod(it.productId);
     const what = i.demand ? fq(i.qty) + ' ' + p.unit : t(LOOK[i.st].w) + (i.st === 'none' ? '' : ' · ' + fq(i.qty) + ' ' + p.unit);
-    toast((c.flat ? c.flat + ' ' : '') + c.name + ': ' + what, () => { setMark(c.id, day, prev || null); save(); render(); });
+    toast((c.flat ? c.flat + ' ' : '') + c.name + ': ' + what, () => { setMark(lkey(c, it), day, prev || null); save(); render(); });
   }
-  // Re-reads the edit form so the monthly estimate follows every change.
-  function updEst() {
-    const box = $('#f-est');
-    if (!box) return;
-    const p = prod(ui.form.pid);
-    const r = $('#f-rate').value;
-    box.textContent = estimate(ui.form.type, ui.form.days, ui.form.qty, r === '' ? +p.rate : +r);
-    $('#f-qty').textContent = fq(ui.form.qty);
-    $('#f-unit').textContent = p.unit;
-    $('#f-rate').placeholder = p.rate;
-    const presets = p.unit === 'L' ? [0.5, 1, 1.5, 2, 3] : [1, 2, 3, 4, 5];
-    $('#presets').innerHTML = presets.map((v) => '<button type="button" class="' + (v === ui.form.qty ? 'on' : '') + '" data-act="qtyset" data-val="' + v + '">' + fq(v) + ' ' + esc(p.unit) + '</button>').join('');
+  // Redraws the edit form after a tap, keeping what was typed.
+  function formTap(fn) { snapForm(); fn(ui.form); render(); }
+  const formIdx = (el) => ui.form.items[+el.dataset.i];
+  function daySheet(c, day) {
+    ui.sheetDay = { cid: c.id, day };
+    const opts = [['done', 'given'], ['half', 'half'], ['skip', 'skip'], ['extra', 'extra']];
+    sheet(sheetHead(parse(day).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })) + '<div class="muted" style="font-weight:600">' + esc(c.name) + '</div>' +
+      lines(c).map((it) => {
+        const i = lineInfo(c, it, day); const p = prod(it.productId);
+        const d = ' data-id="' + c.id + '" data-line="' + it.id + '"';
+        const pick = i.demand
+          ? '<div class="seg"><button type="button" data-act="setline" data-s="minus"' + d + '>−</button><button type="button" class="on">' + fq(i.qty) + ' ' + esc(p.unit) + '</button><button type="button" data-act="setline" data-s="plus"' + d + '>+</button></div>'
+          : '<div class="seg">' + opts.map(([k, w]) => '<button type="button" class="' + (i.st === k ? 'on' : '') + '" data-act="setline" data-s="' + k + '"' + d + '>' + esc(t(w)) + '</button>').join('') + '</div>';
+        return '<div class="card soft"><div class="row" style="margin-bottom:8px"><b class="grow">' + esc(lineText(it)) + '</b><span class="muted" style="font-weight:700">' + fq(i.qty) + ' ' + esc(p.unit) + '</span></div>' + pick + '</div>';
+      }).join(''));
   }
   const handlers = {
     undo() { const u = toast.undo; $('#toast').hidden = true; if (u) u(); },
@@ -838,25 +930,25 @@
     },
     filter(el) { ui.filter = el.dataset.val; render(); },
     mark(el, id) {
-      const c = cust(id); const day = ui.day; const s = el.dataset.s;
-      const prev = (S.marks[day] || {})[id];
+      const c = cust(id); const it = lineOf(c, el.dataset.line); const key = lkey(c, it); const day = ui.day; const s = el.dataset.s;
+      const prev = (S.marks[day] || {})[key];
       if (s === 'extra') {
-        const step = stepOf(prod(c.productId).unit);
-        setMark(id, day, { s: 'extra', x: prev && prev.s === 'extra' ? +prev.x + step : step });
-        ui.edit = id;
-      } else { setMark(id, day, { s }); ui.edit = null; }
-      save(); render(); markToast(c, day, prev);
+        const step = stepOf(prod(it.productId).unit);
+        setMark(key, day, { s: 'extra', x: prev && prev.s === 'extra' ? +prev.x + step : step });
+        ui.edit = key;
+      } else { setMark(key, day, { s }); ui.edit = null; }
+      save(); render(); markToast(c, it, day, prev);
     },
     give(el, id) {
-      const c = cust(id); const day = ui.day; const prev = (S.marks[day] || {})[id];
-      setMark(id, day, { s: 'extra', x: ((prev && +prev.x) || 0) + 1 });
-      save(); render(); markToast(c, day, prev);
+      const c = cust(id); const it = lineOf(c, el.dataset.line); const key = lkey(c, it); const day = ui.day; const prev = (S.marks[day] || {})[key];
+      setMark(key, day, { s: 'extra', x: ((prev && +prev.x) || 0) + 1 });
+      save(); render(); markToast(c, it, day, prev);
     },
     clear(el, id) {
-      const c = cust(id); const day = ui.day; const prev = (S.marks[day] || {})[id];
-      setMark(id, day, null); save(); render(); markToast(c, day, prev);
+      const c = cust(id); const it = lineOf(c, el.dataset.line); const key = lkey(c, it); const day = ui.day; const prev = (S.marks[day] || {})[key];
+      setMark(key, day, null); save(); render(); markToast(c, it, day, prev);
     },
-    change(el, id) { ui.edit = ui.edit === id ? null : id; render(); },
+    change(el, id) { const key = lkey(cust(id), lineOf(cust(id), el.dataset.line)); ui.edit = ui.edit === key ? null : key; render(); },
     resume(el, id) {
       const c = cust(id); const day = ui.day;
       const before = JSON.parse(JSON.stringify(c.pauses || []));
@@ -866,67 +958,76 @@
     },
     endrun() {
       const day = ui.day;
-      const list = active().filter((c) => (!ui.sector || c.sector === ui.sector) && rowState(c, day).pending);
+      const list = active().filter((c) => !ui.sector || c.sector === ui.sector).map((c) => ({ c, h: houseState(c, day) })).filter((x) => x.h.pending);
       if (!list.length) return;
       askThen(fill('endRunAsk', { n: list.length }), () => {
         const before = JSON.parse(JSON.stringify(S.marks[day] || {}));
-        list.forEach((c) => setMark(c.id, day, { s: 'done' }));
+        list.forEach(({ c, h }) => h.ls.forEach((x) => { if (x.i.pending) setMark(lkey(c, x.it), day, { s: 'done' }); }));
         save(); render();
         toast(t('allDone'), () => { S.marks[day] = before; if (!Object.keys(before).length) delete S.marks[day]; save(); render(); });
       });
     },
     cycleday(el) {
       const c = cust(ui.cid); const day = el.dataset.day;
-      const prev = (S.marks[day] || {})[c.id];
       const cur = dayInfo(c, day);
       if (cur.st === 'away') { toast(fill('pausedUntil', { d: dshort(cur.till) })); return; }
-      if (cur.demand) { const x = ((prev && prev.x) || 0) + 1; setMark(c.id, day, x > 9 ? null : { s: 'extra', x }); }
-      else if (cur.st === 'none') setMark(c.id, day, prev ? null : { s: 'extra', x: 1 });
-      else { const nx = NEXT[cur.st]; setMark(c.id, day, nx === 'extra' ? { s: 'extra', x: 1 } : { s: nx }); }
+      if (lines(c).length > 1) { daySheet(c, day); return; }
+      const key = c.id; const prev = (S.marks[day] || {})[key];
+      if (cur.demand) { const x = ((prev && prev.x) || 0) + 1; setMark(key, day, x > 9 ? null : { s: 'extra', x }); }
+      else if (cur.st === 'none') setMark(key, day, prev ? null : { s: 'extra', x: 1 });
+      else { const nx = NEXT[cur.st]; setMark(key, day, nx === 'extra' ? { s: 'extra', x: 1 } : { s: nx }); }
       save(); render();
-      toast(dshort(day) + ': ' + t(LOOK[dayInfo(c, day).st].w), () => { setMark(c.id, day, prev || null); save(); render(); });
+      toast(dshort(day) + ': ' + t(LOOK[dayInfo(c, day).st].w), () => { setMark(key, day, prev || null); save(); render(); });
+    },
+    setline(el, id) {
+      const c = cust(id); const it = lineOf(c, el.dataset.line); const key = lkey(c, it); const day = ui.sheetDay.day; const s = el.dataset.s;
+      const prev = (S.marks[day] || {})[key];
+      if (s === 'plus' || s === 'minus') { const x = ((prev && +prev.x) || 0) + (s === 'plus' ? 1 : -1); setMark(key, day, x > 0 ? { s: 'extra', x } : null); }
+      else if (s === 'extra') setMark(key, day, { s: 'extra', x: prev && prev.s === 'extra' ? +prev.x + stepOf(prod(it.productId).unit) : stepOf(prod(it.productId).unit) });
+      else setMark(key, day, { s });
+      save(); render(); daySheet(c, day);
     },
     closed() {
       askThen(t('shopClosedAsk'), () => {
         const day = ui.day; const before = JSON.parse(JSON.stringify(S.marks[day] || {}));
-        active().forEach((c) => { const st = dayInfo(c, day).st; if ((c.sched || {}).type !== 'demand' && st !== 'none' && st !== 'away') setMark(c.id, day, { s: 'skip' }); });
+        active().forEach((c) => lines(c).forEach((it) => { const st = lineInfo(c, it, day).st; if ((it.sched || {}).type !== 'demand' && st !== 'none' && st !== 'away') setMark(lkey(c, it), day, { s: 'skip' }); }));
         save(); render();
         toast(t('shopClosed'), () => { S.marks[day] = before; if (!Object.keys(before).length) delete S.marks[day]; save(); render(); });
       });
     },
     voice(el) { voice(el); },
-    sched(el) {
-      ui.form.type = el.dataset.val; onlyOn(el);
-      $('#daysbox').classList.toggle('hidden', ui.form.type !== 'days');
-      $('#qtybox').classList.toggle('hidden', ui.form.type === 'demand');
-      updEst();
+    sched(el) { formTap(() => { formIdx(el).type = el.dataset.val; }); },
+    wday(el) { formTap(() => { const a = formIdx(el).days; const d = +el.dataset.val; const i = a.indexOf(d); if (i >= 0) a.splice(i, 1); else a.push(d); }); },
+    fprod(el) { formTap(() => { const x = formIdx(el); x.pid = el.dataset.val; const st = stepOf(prod(x.pid).unit); x.qty = Math.max(st, Math.round(x.qty / st) * st); }); },
+    qty(el) { formTap(() => { const x = formIdx(el); const st = stepOf(prod(x.pid).unit); x.qty = Math.max(st, Math.round((x.qty + st * +el.dataset.n) / st) * st); }); },
+    qtyset(el) { formTap(() => { formIdx(el).qty = +el.dataset.val; }); },
+    additem() {
+      formTap((F) => {
+        const used = F.items.map((x) => x.pid);
+        const p = S.products.find((x) => !used.includes(x.id)) || S.products[0] || {};
+        F.items.push(formItem({ productId: p.id, qty: 1, sched: { type: 'daily', days: [1, 3, 5] } }));
+      });
     },
-    wday(el) {
-      const d = +el.dataset.val; const a = ui.form.days;
-      const i = a.indexOf(d); if (i >= 0) a.splice(i, 1); else a.push(d);
-      el.classList.toggle('on', i < 0); el.setAttribute('aria-pressed', String(i < 0));
-      updEst();
-    },
-    fprod(el) { ui.form.pid = el.dataset.val; onlyOn(el); const st = stepOf(prod(ui.form.pid).unit); ui.form.qty = Math.max(st, Math.round(ui.form.qty / st) * st); updEst(); },
-    qty(el) { const st = stepOf(prod(ui.form.pid).unit); ui.form.qty = Math.max(st, Math.round((ui.form.qty + st * +el.dataset.n) / st) * st); updEst(); },
-    qtyset(el) { ui.form.qty = +el.dataset.val; updEst(); },
+    delitem(el) { formTap((F) => { F.items.splice(+el.dataset.i, 1); }); },
     savecust(el) {
-      const name = $('#f-name').value.trim();
+      snapForm();
+      const F = ui.form, f = F.f;
+      const name = (f.name || '').trim();
       if (!name) { $('#f-name').focus(); return; }
       let c = el.dataset.id ? cust(el.dataset.id) : null;
-      if (!c) { c = { id: uid(), start: ($('#f-start') && $('#f-start').value) || todayStr(), pauses: [] }; S.customers.push(c); }
+      if (!c) { c = { id: uid(), start: f.start || todayStr(), pauses: [] }; S.customers.push(c); }
       Object.assign(c, {
-        name, flat: $('#f-flat').value.trim(), sector: $('#f-sector').value.trim(), phone: $('#f-phone').value.trim(),
-        productId: ui.form.pid, qty: ui.form.qty, sched: { type: ui.form.type, days: ui.form.days.slice().sort() },
-        rate: $('#f-rate').value === '' ? '' : +$('#f-rate').value, opening: $('#f-open').value === '' ? '' : +$('#f-open').value
+        name, flat: (f.flat || '').trim(), sector: (f.sector || '').trim(), phone: (f.phone || '').trim(), opening: f.opening === '' || f.opening == null ? '' : +f.opening,
+        items: F.items.map((x, n) => ({ id: x.id || (n === 0 && !c.items ? c.id : uid()), productId: x.pid, qty: x.qty, sched: { type: x.type, days: x.days.slice().sort() }, rate: x.rate === '' || x.rate == null ? '' : +x.rate }))
       });
+      ui.form = null;
       save(); location.hash = '#/c/' + c.id; toast(t('saved'));
     },
     delcust(el, id) {
       askThen(t('deleteAsk'), () => {
         S.customers = S.customers.filter((c) => c.id !== id);
         S.payments = S.payments.filter((p) => p.cid !== id);
-        Object.keys(S.marks).forEach((d) => { delete S.marks[d][id]; if (!Object.keys(S.marks[d]).length) delete S.marks[d]; });
+        Object.keys(S.marks).forEach((d) => { Object.keys(S.marks[d]).forEach((k) => { if (k === id || k.startsWith(id + '.')) delete S.marks[d][k]; }); if (!Object.keys(S.marks[d]).length) delete S.marks[d]; });
         save(); location.hash = '#/customers';
       });
     },
@@ -995,12 +1096,12 @@
   };
   document.addEventListener('input', (e) => {
     if (e.target.id === 'search') { ui.q = e.target.value; const pos = e.target.selectionStart; render(); const s = $('#search'); s.focus(); s.setSelectionRange(pos, pos); }
-    if (e.target.id === 'f-rate') updEst();
+    if (e.target.dataset && e.target.dataset.rate != null && ui.form) { ui.form.items[+e.target.dataset.rate].rate = e.target.value; $('#f-est').textContent = estimate(ui.form.items); }
   });
   document.addEventListener('change', (e) => {
     if (e.target.id !== 'restore' || !e.target.files[0]) return;
     const r = new FileReader();
-    r.onload = () => { try { const d = JSON.parse(r.result); if (!d.vendor || !Array.isArray(d.customers)) throw 0; S = d; save(); location.hash = '#/home'; render(); toast(t('saved')); } catch (err) { toast('Wrong file'); } };
+    r.onload = () => { try { const d = JSON.parse(r.result); if (!d.vendor || !Array.isArray(d.customers)) throw 0; S = d; S.customers.forEach(lines); save(); location.hash = '#/home'; render(); toast(t('saved')); } catch (err) { toast('Wrong file'); } };
     r.readAsText(e.target.files[0]);
   });
   window.addEventListener('online', () => render());
@@ -1041,7 +1142,7 @@
   window.addEventListener('hashchange', () => {
     const r = location.hash.split('/')[1] || '';
     if (isRoute(r) && !isRoute(lastRoute)) { ui.day = todayStr(); ui.edit = null; }
-    lastRoute = r; closeSheet(); $('#toast').hidden = true; render(); window.scrollTo(0, 0);
+    lastRoute = r; ui.form = null; closeSheet(); $('#toast').hidden = true; render(); window.scrollTo(0, 0);
   });
   lastRoute = location.hash.split('/')[1] || '';
   render();

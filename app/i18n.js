@@ -41,7 +41,7 @@ window.STRINGS = {
     sendDues: 'Send dues on WhatsApp', payLinks: 'reminders', overdue: 'Overdue accounts', daysSince: 'days since paid', lastPaid: 'Last paid',
     ping: 'Ping WhatsApp', rates: 'Product rates', activeHomes: 'homes', editRate: 'Edit rate', details: 'Customer details',
     deliverySetup: 'Daily delivery', firstDay: 'First delivery day', estMonthly: 'Est. monthly bill', perMonth: '/ month', optional: 'optional',
-    pickCustomer: 'Who paid?', stockSub: 'What to pick up', offlineShort: 'Offline', tagline: 'Daily delivery khata'
+    pickCustomer: 'Who paid?', stockSub: 'What to pick up', offlineShort: 'Offline', tagline: 'Daily delivery khata', itemsN: 'items', itemN: 'Item', addAnother: 'Add another item'
   },
   hi: {
     namaste: 'नमस्ते,', houses: 'घर', saved: 'सेव', offline: 'नेटवर्क नहीं। फ़ोन में सेव है।',
@@ -84,6 +84,6 @@ window.STRINGS = {
     sendDues: 'व्हाट्सऐप पर बकाया भेजें', payLinks: 'याद दिलाएँ', overdue: 'बकायादार', daysSince: 'दिन से जमा नहीं', lastPaid: 'आखिरी जमा',
     ping: 'व्हाट्सऐप करें', rates: 'सामान के रेट', activeHomes: 'घर', editRate: 'रेट बदलें', details: 'ग्राहक की जानकारी',
     deliverySetup: 'रोज़ की डिलीवरी', firstDay: 'पहली डिलीवरी', estMonthly: 'अंदाज़न महीने का बिल', perMonth: '/ महीना', optional: 'ज़रूरी नहीं',
-    pickCustomer: 'किसने पैसे दिए?', stockSub: 'कितना लेना है', offlineShort: 'ऑफ़लाइन', tagline: 'रोज़ की डिलीवरी का खाता'
+    pickCustomer: 'किसने पैसे दिए?', stockSub: 'कितना लेना है', offlineShort: 'ऑफ़लाइन', tagline: 'रोज़ की डिलीवरी का खाता', itemsN: 'सामान', itemN: 'सामान', addAnother: 'एक और सामान जोड़ें'
   }
 };

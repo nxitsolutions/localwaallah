@@ -48,7 +48,7 @@ h1, h2, h3 { margin: 0; letter-spacing: -.01em; }
 
 /* ---------- cards & common ---------- */
 .card { background: var(--card); border-radius: var(--r3); padding: 16px; box-shadow: var(--sh); margin-top: 14px; }
-.card.flat { box-shadow: none; background: var(--s1); }
+.card.soft { box-shadow: none; background: var(--s1); }
 .ctitle { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .ctitle h2 { font-size: 18px; font-weight: 700; }
 .ctitle small { display: block; font-size: 13px; color: var(--ink2); font-weight: 600; }
@@ -127,7 +127,7 @@ h1, h2, h3 { margin: 0; letter-spacing: -.01em; }
 .who .nm { font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
 .who .nm > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .who .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.item { display: inline-flex; align-items: center; gap: 4px; background: var(--pri-soft); color: var(--pri); font-weight: 700; font-size: 13px; padding: 3px 9px; border-radius: 999px; }
+.item { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; background: var(--pri-soft); color: var(--pri); font-weight: 700; font-size: 13px; padding: 3px 9px; border-radius: 999px; }
 .duechip { font-size: 13px; font-weight: 700; color: var(--err); }
 .spill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; white-space: nowrap; flex: none; }
 .spill.done { background: var(--ok-soft); color: var(--ok); }
@@ -333,3 +333,15 @@ body.has-run #toast { bottom: calc(176px + env(safe-area-inset-bottom)); }
 
 /* ---------- public customer page ---------- */
 .pub .apphead { position: static; }
+.line { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.line .lhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.line .acts { margin-top: 10px; }
+.itemcard { background: var(--s1); border-radius: var(--r3); padding: 12px; margin-top: 14px; }
+.itemcard .head { display: flex; align-items: center; gap: 8px; font-weight: 800; }
+.itemcard .qtybox { background: #fff; }
+.itemcard .seg { background: #fff; }
+.itemcard .inp { background: #fff; }
+.itemcard .presets button { background: var(--s1); }
+.itemcard .presets button.on { background: var(--pri); }
+.dayline { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.dayline .seg { flex: 1; }
