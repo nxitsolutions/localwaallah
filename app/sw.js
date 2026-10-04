@@ -1,5 +1,5 @@
 // Offline-first: the app shell is cached on install, everything else is cached as it is used.
-const CACHE = 'localwaallah-v2';
+const CACHE = 'localwaallah-v3';
 const SHELL = ['./', 'index.html', 'styles.css', 'i18n.js', 'app.js', 'milkman.webp', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
