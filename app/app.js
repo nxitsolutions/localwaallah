@@ -1240,8 +1240,10 @@
     if (auth.dev) { auth.ready = true; render(); if (cached) pull(); return; }
     try {
       const v = 'https://www.gstatic.com/firebasejs/10.14.1/';
-      await loadScript(v + 'firebase-app-compat.js');
-      await loadScript(v + 'firebase-auth-compat.js');
+      if (!window.firebase) {
+        await loadScript(v + 'firebase-app-compat.js');
+        await loadScript(v + 'firebase-auth-compat.js');
+      }
       auth.fb = window.firebase;
       auth.fb.initializeApp(cfg.firebase);
     } catch (e) {
