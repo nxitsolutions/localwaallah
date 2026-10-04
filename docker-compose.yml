@@ -1,0 +1,29 @@
+# Runs LocalWaallah and its database on one machine: `docker compose up -d`.
+# Copy .env.example to .env and fill it in first.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://localwaallah:${POSTGRES_PASSWORD}@db:5432/localwaallah
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: localwaallah
+      POSTGRES_DB: localwaallah
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U localwaallah"]
+      interval: 5s
+      retries: 10
+volumes:
+  pgdata:

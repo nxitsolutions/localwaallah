@@ -345,3 +345,15 @@ body.has-run #toast { bottom: calc(176px + env(safe-area-inset-bottom)); }
 .itemcard .presets button.on { background: var(--pri); }
 .dayline { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .dayline .seg { flex: 1; }
+
+/* ---------- sign in ---------- */
+.splash { min-height: 80vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+.splash .logo { width: 72px; height: 72px; border-radius: var(--r3); }
+.splash b { font-size: 24px; font-weight: 800; }
+.gbtn { box-shadow: inset 0 0 0 2px var(--line); color: var(--ink); }
+.or { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: var(--muted); font-weight: 700; font-size: 14px; }
+.or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.live.busy { background: var(--amber); color: var(--on-amber); }
+.live.busy::before { background: var(--on-amber); }
+.btn[disabled] { opacity: .6; }
+#recap { margin-top: 8px; }
