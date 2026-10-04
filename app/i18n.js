@@ -29,7 +29,19 @@ window.STRINGS = {
     noApp: 'no app needed', askPause: 'Ask to pause', askExtra: 'Ask for extra', unitsFor: 'for',
     deliveredDays: 'Given', tapDay: 'Tap a day to change it', copied: 'Link copied', cans: 'cans', can: 'can',
     house: 'house', away2: 'away', open: 'Open', back: 'Back', editCustomer: 'Edit customer', history: 'Payments',
-    noPayments: 'No payments yet', cashInHand: 'Cash in hand today', allSectors: 'All areas', newRateFrom: 'Rate', custLink: 'Customer link (no app needed)', yesDo: 'Yes', copy: 'Copy'
+    noPayments: 'No payments yet', cashInHand: 'Cash in hand today', allSectors: 'All areas', newRateFrom: 'Rate', custLink: 'Customer link (no app needed)', yesDo: 'Yes', copy: 'Copy', tabHome: 'Home', tabDeliver: 'Deliver', tabCustomers: 'Customers', tabMoney: 'Money', tabStock: 'Stock', tabRoute: 'Route', tabAdd: 'Add', tabBilling: 'Billing',
+    route: 'Morning route', total: 'Total', doneW: 'Done', left: 'Left', remaining: 'remaining', progress: 'Round in progress',
+    pending: 'Pending', delivered: 'Delivered', skipped: 'Skipped', onVacation: 'On vacation', pausedUntil: 'Delivery paused until {d}',
+    resumeToday: 'Resume today', change: 'Change', close: 'Close', upNext: 'Up next', call: 'Call', housesLeft: 'houses left',
+    toDeliver: 'to deliver', endRun: 'End run', endRunAsk: 'Mark the {n} remaining houses as delivered?', notGiven: 'Not delivered',
+    khata: 'Customer khata', totalOutstanding: 'Total outstanding', advance: 'advance', collect: 'Collect cash / UPI',
+    subscription: 'Subscription', weekSchedule: 'Delivery days', pauseDelivery: 'Pause delivery (holiday)', dailyLog: 'Daily khata',
+    recentPay: 'Recent payments', noDelivery: 'No delivery', totalBilling: 'Total billing', accounts: 'accounts', recovery: 'Recovery',
+    collected: 'collected', doneK: 'Collected', pendingK: 'Pending', paidUp: 'paid up', accountsDue: 'accounts due', billingOps: 'Quick actions',
+    sendDues: 'Send dues on WhatsApp', payLinks: 'reminders', overdue: 'Overdue accounts', daysSince: 'days since paid', lastPaid: 'Last paid',
+    ping: 'Ping WhatsApp', rates: 'Product rates', activeHomes: 'homes', editRate: 'Edit rate', details: 'Customer details',
+    deliverySetup: 'Daily delivery', firstDay: 'First delivery day', estMonthly: 'Est. monthly bill', perMonth: '/ month', optional: 'optional',
+    pickCustomer: 'Who paid?', stockSub: 'What to pick up', offlineShort: 'Offline', tagline: 'Daily delivery khata', itemsN: 'items', itemN: 'Item', addAnother: 'Add another item'
   },
   hi: {
     namaste: 'नमस्ते,', houses: 'घर', saved: 'सेव', offline: 'नेटवर्क नहीं। फ़ोन में सेव है।',
@@ -60,6 +72,18 @@ window.STRINGS = {
     noApp: 'ऐप की ज़रूरत नहीं', askPause: 'रोकने को कहें', askExtra: 'ज़्यादा माँगें', unitsFor: '',
     deliveredDays: 'दिया', tapDay: 'बदलने के लिए दिन दबाएँ', copied: 'लिंक कॉपी हुआ', cans: 'कैन', can: 'कैन',
     house: 'घर', away2: 'छुट्टी', open: 'खोलें', back: 'पीछे', editCustomer: 'ग्राहक बदलें', history: 'जमा पैसे',
-    noPayments: 'अभी कोई जमा नहीं', cashInHand: 'आज हाथ में नकद', allSectors: 'सब इलाके', newRateFrom: 'रेट', custLink: 'ग्राहक लिंक (ऐप नहीं चाहिए)', yesDo: 'हाँ', copy: 'कॉपी'
+    noPayments: 'अभी कोई जमा नहीं', cashInHand: 'आज हाथ में नकद', allSectors: 'सब इलाके', newRateFrom: 'रेट', custLink: 'ग्राहक लिंक (ऐप नहीं चाहिए)', yesDo: 'हाँ', copy: 'कॉपी', tabHome: 'होम', tabDeliver: 'डिलीवरी', tabCustomers: 'ग्राहक', tabMoney: 'पैसे', tabStock: 'स्टॉक', tabRoute: 'फेरी', tabAdd: 'जोड़ें', tabBilling: 'बिलिंग',
+    route: 'सुबह की फेरी', total: 'कुल', doneW: 'हो गया', left: 'बाकी', remaining: 'बाकी', progress: 'फेरी चालू है',
+    pending: 'बाकी है', delivered: 'दिया', skipped: 'नहीं दिया', onVacation: 'छुट्टी पर', pausedUntil: 'डिलीवरी {d} तक बंद',
+    resumeToday: 'आज से चालू', change: 'बदलें', close: 'बंद करें', upNext: 'अगला', call: 'कॉल', housesLeft: 'घर बाकी',
+    toDeliver: 'देना है', endRun: 'फेरी पूरी', endRunAsk: 'बाकी {n} घरों को "दिया" कर दें?', notGiven: 'नहीं दिया',
+    khata: 'ग्राहक खाता', totalOutstanding: 'कुल बकाया', advance: 'एडवांस', collect: 'नकद / UPI लें',
+    subscription: 'रोज़ का सामान', weekSchedule: 'डिलीवरी के दिन', pauseDelivery: 'डिलीवरी रोकें (छुट्टी)', dailyLog: 'रोज़ का हिसाब',
+    recentPay: 'जमा रसीदें', noDelivery: 'डिलीवरी नहीं', totalBilling: 'कुल मासिक बिल', accounts: 'खाते', recovery: 'वसूली',
+    collected: 'मिला', doneK: 'वसूली', pendingK: 'बाकी', paidUp: 'पूरा जमा', accountsDue: 'खाते बाकी', billingOps: 'जल्दी के काम',
+    sendDues: 'व्हाट्सऐप पर बकाया भेजें', payLinks: 'याद दिलाएँ', overdue: 'बकायादार', daysSince: 'दिन से जमा नहीं', lastPaid: 'आखिरी जमा',
+    ping: 'व्हाट्सऐप करें', rates: 'सामान के रेट', activeHomes: 'घर', editRate: 'रेट बदलें', details: 'ग्राहक की जानकारी',
+    deliverySetup: 'रोज़ की डिलीवरी', firstDay: 'पहली डिलीवरी', estMonthly: 'अंदाज़न महीने का बिल', perMonth: '/ महीना', optional: 'ज़रूरी नहीं',
+    pickCustomer: 'किसने पैसे दिए?', stockSub: 'कितना लेना है', offlineShort: 'ऑफ़लाइन', tagline: 'रोज़ की डिलीवरी का खाता', itemsN: 'सामान', itemN: 'सामान', addAnother: 'एक और सामान जोड़ें'
   }
 };

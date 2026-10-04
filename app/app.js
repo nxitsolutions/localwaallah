@@ -1,4 +1,4 @@
-/* LocalWaallah v1: offline-first delivery ledger. Everything is stored on the phone (localStorage). */
+/* LocalWaallah: offline-first delivery ledger. Everything is stored on the phone (localStorage). */
 (function () {
   'use strict';
 
@@ -56,7 +56,19 @@
     pause: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M10 12v5M14 12v5"/>',
     plus: '<path d="M12 5v14M5 12h14"/>', edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
-    close: '<path d="M6 6l12 12M18 6 6 18"/>', link: '<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>'
+    home: '<path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 19z"/>',
+    close: '<path d="M6 6l12 12M18 6 6 18"/>',
+    truck: '<path d="M3 6h11v10H3z"/><path d="M14 9h4l3 3.5V16h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
+    receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+    drop: '<path d="M12 3.5c3.5 4.2 6 7.5 6 10.5a6 6 0 0 1-12 0c0-3 2.5-6.3 6-10.5z"/>',
+    phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+    ban: '<circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/>',
+    wallet: '<path d="M4 7a2 2 0 0 1 2-2h12v2"/><rect x="4" y="7" width="17" height="12" rx="2"/><path d="M16 13h2"/>',
+    cal: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+    pin: '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
+    user: '<circle cx="12" cy="8" r="3.8"/><path d="M4.5 20c.8-4 3.8-6 7.5-6s6.7 2 7.5 6"/>', link: '<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>'
   };
   const ic = (name, cls) => '<svg class="i ' + (cls || '') + '" viewBox="0 0 24 24" aria-hidden="true">' + P[name] + '</svg>';
 
@@ -72,62 +84,93 @@
   // ---------- ledger rules ----------
   const prod = (id) => S.products.find((p) => p.id === id) || S.products[0] || { name: '?', unit: '', rate: 0 };
   const cust = (id) => S.customers.find((c) => c.id === id);
-  const rateOf = (c) => (c.rate != null && c.rate !== '' ? +c.rate : +prod(c.productId).rate || 0);
+  // A customer takes one or more items ("lines"), each with its own quantity, days and rate.
+  // The first line's id is the customer id, so marks saved before lines existed still match it.
+  function lines(c) {
+    if (!c.items || !c.items.length) {
+      c.items = [{ id: c.id, productId: c.productId, qty: c.qty, sched: c.sched || { type: 'daily' }, rate: c.rate == null ? '' : c.rate }];
+      delete c.productId; delete c.qty; delete c.sched; delete c.rate;
+    }
+    return c.items;
+  }
+  const lkey = (c, it) => (it.id === c.id ? c.id : c.id + '.' + it.id);
+  const lineOf = (c, lid) => lines(c).find((x) => x.id === lid) || lines(c)[0];
+  const rateOf = (it) => (it.rate != null && it.rate !== '' ? +it.rate : +prod(it.productId).rate || 0);
   const pauseOn = (c, day) => (c.pauses || []).find((p) => p.from <= day && day <= p.to);
-  function isScheduled(c, day) {
-    const s = c.sched || { type: 'daily' };
+  function isScheduled(c, it, day) {
+    const s = it.sched || { type: 'daily' };
     if (s.type === 'daily') return true;
     if (s.type === 'alt') return ((diffDays(c.start || day, day) % 2) + 2) % 2 === 0;
     if (s.type === 'days') return (s.days || []).includes(parse(day).getDay());
     return false;
   }
-  // st: done | half | skip | extra | away | none ; qty in product units
-  function dayInfo(c, day) {
+  // st: done | half | skip | extra | away | none ; qty in the item's unit
+  function lineInfo(c, it, day) {
     if (c.start && day < c.start) return { st: 'none', qty: 0 };
     const p = pauseOn(c, day);
     if (p) return { st: 'away', qty: 0, till: p.to };
-    const m = (S.marks[day] || {})[c.id];
-    if ((c.sched || {}).type === 'demand') {
+    const m = (S.marks[day] || {})[lkey(c, it)];
+    if ((it.sched || {}).type === 'demand') {
       return m && m.x > 0 ? { st: 'done', qty: +m.x, demand: true } : { st: 'none', qty: 0, demand: true };
     }
-    if (!isScheduled(c, day)) return m && m.s === 'extra' ? { st: 'extra', qty: +(m.x || 1) } : { st: 'none', qty: 0 };
+    if (!isScheduled(c, it, day)) return m && m.s === 'extra' ? { st: 'extra', qty: +(m.x || 1) } : { st: 'none', qty: 0 };
     const st = (m && m.s) || 'done';
-    const q = +c.qty || 0;
+    const q = +it.qty || 0;
     const qty = st === 'done' ? q : st === 'half' ? q / 2 : st === 'skip' ? 0 : q + +(m.x || 1);
     return { st, qty };
   }
-  function setMark(cid, day, mark) {
+  // The whole house for one day: amt is the money charged; st sums up all its items.
+  function dayInfo(c, day) {
+    const ls = lines(c).map((it) => ({ it, i: lineInfo(c, it, day) }));
+    const amt = ls.reduce((a, x) => a + x.i.qty * rateOf(x.it), 0);
+    if (ls.length === 1) return Object.assign({}, ls[0].i, { amt });
+    const sts = ls.map((x) => x.i.st).filter((v) => v !== 'none');
+    let st = 'done';
+    if (sts.includes('away')) st = 'away';
+    else if (!sts.length) st = 'none';
+    else if (sts.every((v) => v === 'skip')) st = 'skip';
+    else if (sts.includes('extra')) st = 'extra';
+    else if (sts.includes('half') || sts.includes('skip')) st = 'half';
+    return { st, qty: ls.reduce((a, x) => a + x.i.qty, 0), amt, till: (ls[0].i || {}).till };
+  }
+  function setMark(key, day, mark) {
     S.marks[day] = S.marks[day] || {};
-    if (mark) S.marks[day][cid] = mark; else delete S.marks[day][cid];
+    if (mark) S.marks[day][key] = mark; else delete S.marks[day][key];
     if (!Object.keys(S.marks[day]).length) delete S.marks[day];
   }
-  function usedBetween(c, from, to) {
-    let qty = 0;
-    if (from > to) return 0;
-    for (let d = from; d <= to; d = addDays(d, 1)) qty += dayInfo(c, d).qty;
-    return qty;
+  function chargedBetween(c, from, to) {
+    let amt = 0;
+    for (let d = from; d <= to; d = addDays(d, 1)) amt += dayInfo(c, d).amt;
+    return amt;
   }
   const paidBetween = (c, from, to) => S.payments.filter((p) => p.cid === c.id && p.date >= from && p.date <= to).reduce((a, p) => a + +p.amt, 0);
   function balance(c, upTo) {
     const from = c.start || upTo;
-    return (+c.opening || 0) + usedBetween(c, from, upTo) * rateOf(c) - S.payments.filter((p) => p.cid === c.id && p.date <= upTo).reduce((a, p) => a + +p.amt, 0);
+    return (+c.opening || 0) + chargedBetween(c, from, upTo) - S.payments.filter((p) => p.cid === c.id && p.date <= upTo).reduce((a, p) => a + +p.amt, 0);
   }
   function monthBill(c, ym) {
     const first = monthStart(ym), today = todayStr();
     const last = monthEnd(ym) < today ? monthEnd(ym) : today;
     const old = balance(c, addDays(first, -1));
-    const qty = usedBetween(c, first < (c.start || first) ? c.start : first, last);
-    const amount = qty * rateOf(c);
+    const from = first < (c.start || first) ? c.start : first;
+    const ls = lines(c).map((it) => {
+      let qty = 0;
+      for (let d = from; d <= last; d = addDays(d, 1)) qty += lineInfo(c, it, d).qty;
+      return { it, p: prod(it.productId), qty, rate: rateOf(it), amount: qty * rateOf(it) };
+    });
+    const amount = ls.reduce((a, x) => a + x.amount, 0);
     const paid = paidBetween(c, first, monthEnd(ym));
-    return { old, qty, amount, paid, due: old + amount - paid };
+    return { old, lines: ls, qty: ls[0].qty, amount, paid, due: old + amount - paid };
   }
   const active = () => S.customers.filter((c) => !c.deleted);
   function sortRoute(list) {
     return list.slice().sort((a, b) => (a.sector || '').localeCompare(b.sector || '') || (a.flat || '').localeCompare(b.flat || '', undefined, { numeric: true }) || a.name.localeCompare(b.name));
   }
 
+  S.customers.forEach(lines);
+
   // ---------- UI state ----------
-  const ui = { day: todayStr(), sector: '', q: '', stockDay: 'today' };
+  const ui = { day: todayStr(), sector: '', q: '', stockDay: 'today', filter: '', edit: null };
   const LOOK = {
     done: { cls: 's-done', sym: '✓', w: 'given' }, half: { cls: 's-half', sym: '½', w: 'half' },
     skip: { cls: 's-skip', sym: '✕', w: 'skip' }, extra: { cls: 's-extra', sym: '+', w: 'extra' },
@@ -147,172 +190,280 @@
   }
 
   // ---------- shared bits ----------
-  const langBtn = () => '<button class="iconbtn" data-act="lang" aria-label="Change language">' + (S.vendor.lang === 'hi' ? 'A' : 'अ') + '</button>';
-  const syncPill = () => navigator.onLine && saveOk
-    ? '<span class="pill" role="img" aria-label="' + esc(t('saved')) + '" style="color:var(--given)">' + ic('cloud', 'sm') + '</span>'
-    : '<span class="pill off" role="img" aria-label="' + esc(t('offline')) + '">' + ic('nosig', 'sm') + '</span>';
   const heroImg = 'milkman.webp';
+  const other = (k) => (window.STRINGS[S.vendor.lang === 'hi' ? 'en' : 'hi'] || {})[k] || '';
+  const bi = (k) => esc(t(k)) + '<small>' + esc(other(k)) + '</small>';
+  const fill = (k, o) => t(k).replace(/\{(\w+)\}/g, (_, x) => o[x]);
+  const dshort = (day) => parse(day).toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
+  const initials = (n) => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  const langBtn = () => '<button class="iconbtn" data-act="lang" aria-label="Change language">' + (S.vendor.lang === 'hi' ? 'A' : 'अ') + '</button>';
+  const live = () => navigator.onLine && saveOk
+    ? '<span class="live">' + esc(t('saved')) + '</span>'
+    : '<span class="live off">' + esc(t('offlineShort')) + '</span>';
+  function appHead() {
+    return '<header class="apphead"><span class="logo">' + ic('can') + '</span><div class="t"><b>LocalWaallah</b><span>' + esc(S.vendor.name) + ' ' + live() + '</span></div>' +
+      langBtn() + '<a class="iconbtn" href="#/settings" aria-label="' + esc(t('settings')) + '">' + ic('gear', 'sm') + '</a></header>';
+  }
+  function pageHead(title, sub, back) {
+    return '<header class="pagehead">' + (back ? '<a class="iconbtn plain" href="' + back + '" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a>' : '<span class="logo">' + ic('can') + '</span>') +
+      '<div class="grow"><h1>' + esc(title) + '</h1>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</div>' + langBtn() + '</header>';
+  }
   function dayLabel(day) {
-    const d = parse(day);
-    const s = d.toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' });
+    const s = parse(day).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' });
     if (day === todayStr()) return t('today') + ' · ' + s;
     if (day === addDays(todayStr(), 1)) return t('tomorrow') + ' · ' + s;
     return s;
   }
   const monthLabel = (ym) => parse(monthStart(ym)).toLocaleDateString(locale(), { month: 'long', year: 'numeric' });
-  function qtyText(c) {
-    const p = prod(c.productId);
-    if ((c.sched || {}).type === 'demand') return p.name + ' · ' + t('onCall');
-    return fq(c.qty) + ' ' + p.unit + ' ' + p.name;
+  function lineText(it) {
+    const p = prod(it.productId);
+    if ((it.sched || {}).type === 'demand') return p.name + ' · ' + t('onCall');
+    return fq(it.qty) + ' ' + p.unit + ' ' + p.name;
   }
-  function todayCounts(day) {
-    const n = { done: 0, half: 0, skip: 0, extra: 0, away: 0, none: 0, houses: 0 };
-    active().forEach((c) => { const i = dayInfo(c, day); n[i.st]++; if (i.st !== 'none' && i.st !== 'away') n.houses++; });
-    return n;
+  const qtyText = (c) => lines(c).map(lineText).join(' + ');
+  const schedLabel = (it) => t({ daily: 'daily', alt: 'alternate', days: 'pickDays', demand: 'onCall' }[(it.sched || {}).type] || 'daily');
+  // One unit for the route totals when every item uses the same one (litres for a dairy); otherwise totals count houses.
+  function mainUnit() {
+    const units = [...new Set(active().flatMap((c) => lines(c).map((it) => prod(it.productId).unit)))];
+    return units.length === 1 ? units[0] : '';
   }
+  const stepOf = (unit) => (unit === 'L' ? 0.5 : 1);
+  // A scheduled item stays "pending" on the route until the vendor confirms it. Bills still count it as delivered.
+  function houseState(c, day) {
+    const h = dayInfo(c, day);
+    h.ls = lines(c).map((it) => {
+      const i = lineInfo(c, it, day);
+      i.pending = !(S.marks[day] || {})[lkey(c, it)] && !i.demand && i.st === 'done' && day >= todayStr();
+      return { it, i };
+    });
+    h.pending = h.ls.some((x) => x.i.pending);
+    return h;
+  }
+  const rowKind = (i) => (i.pending ? 'pending' : i.st === 'skip' || i.st === 'away' ? 'skip' : i.st === 'none' ? 'call' : 'done');
+  const WD = () => (S.vendor.lang === 'hi' ? ['र', 'सो', 'मं', 'बु', 'गु', 'शु', 'श'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S']);
 
   // ---------- views ----------
   function viewWelcome() {
     const types = ['milk', 'paper', 'water', 'laundry', 'other'];
-    return '<div class="topbar"><span class="brand">LocalWaallah</span>' + langBtn() + '</div>' +
-      '<div class="hero"><div class="sun"></div><img src="' + heroImg + '" alt=""><div class="hello"><span class="muted" style="font-weight:600;font-size:18px">' + esc(t('welcome')) + '</span><b>LocalWaallah</b></div></div>' +
-      '<div class="form">' +
-      '<div class="field"><label for="w-name">' + esc(t('vendorName')) + '</label><input id="w-name" autocomplete="organization" placeholder="Ramesh Dairy"></div>' +
-      '<div class="field"><span class="lab">' + esc(t('whatSell')) + '</span><div class="opts" id="w-type">' +
-      types.map((k, i) => '<button type="button" class="opt' + (i === 0 ? ' on' : '') + '" data-act="pick" data-group="w-type" data-val="' + k + '">' + esc(t(k)) + '</button>').join('') +
-      '</div></div>' +
-      '<div class="btnrow"><button class="bigbtn" data-act="start">' + esc(t('start')) + '</button></div>' +
-      '<div class="btnrow"><button class="bigbtn line" data-act="sample">' + esc(t('sample')) + '</button></div>' +
-      '</div>';
+    return '<div class="welcome"><header class="apphead"><span class="logo">' + ic('can') + '</span><div class="t"><b>LocalWaallah<small>लोकलवाला</small></b><span>' + esc(t('tagline')) + '</span></div>' + langBtn() + '</header>' +
+      '<div class="greet"><img src="' + heroImg + '" alt=""><span class="hi">' + esc(t('welcome')) + '</span><b>LocalWaallah</b><span class="d">' + esc(t('tagline')) + '</span></div>' +
+      '<div class="card"><div class="field"><label for="w-name">' + esc(t('vendorName')) + '</label><div class="inp">' + ic('user', 'sm') + '<input id="w-name" autocomplete="organization" placeholder="Ramesh Dairy"></div></div>' +
+      '<div class="field"><span class="lab">' + esc(t('whatSell')) + '</span><div class="pills" id="w-type">' +
+      types.map((k, i) => '<button type="button" class="pill' + (i === 0 ? ' on' : '') + '" data-act="pick" data-val="' + k + '">' + esc(t(k)) + '</button>').join('') + '</div></div></div>' +
+      '<div class="stack"><button class="btn big block" data-act="start">' + ic('check') + esc(t('start')) + '</button>' +
+      '<button class="btn line block" data-act="sample">' + esc(t('sample')) + '</button></div></div>';
   }
 
-  function viewHome() {
-    const day = todayStr();
-    const n = todayCounts(day);
-    const total = n.done + n.half + n.skip + n.extra + n.away || 1;
-    const seg = (k, color) => n[k] ? '<span style="width:' + (100 * n[k] / total) + '%;background:' + color + '"></span>' : '';
-    let due = 0, dueN = 0;
-    active().forEach((c) => { const b = balance(c, day); if (b > 0.5) { due += b; dueN++; } });
-    const name = S.vendor.name.split(' ')[0] || S.vendor.name;
-    return '<div class="topbar"><span class="brand">LocalWaallah</span><div class="row">' + syncPill() + langBtn() +
-      '<a class="iconbtn" href="#/settings" aria-label="' + esc(t('settings')) + '">' + ic('gear', 'sm') + '</a></div></div>' +
-      '<div class="hero"><svg class="squiggle" width="150" height="70" viewBox="0 0 150 70" fill="none" aria-hidden="true"><path d="M2 40c30-26 52-30 58-12 6 16-14 22-16 8-2-16 30-24 52-6 12 10 30 12 50 0" stroke="#14213D" stroke-width="2" stroke-dasharray="5 6" stroke-linecap="round"/></svg>' +
-      '<div class="sun"></div><img src="' + heroImg + '" alt="">' +
-      '<div class="hello"><span class="muted" style="font-size:18px;font-weight:600">' + esc(t('namaste')) + '</span><b>' + esc(name) + '</b><span class="date">' + esc(parse(day).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })) + '</span></div>' +
-      '<div class="prog"><span class="head" style="font-size:28px;font-weight:800;line-height:1">' + n.houses + '</span><span class="muted" style="font-size:14px;font-weight:600">' + esc(t('houses')) + ' · ' + esc(t('today')) + '</span>' +
-      '<div class="bar">' + seg('done', 'var(--given)') + seg('extra', 'var(--extra)') + seg('half', 'var(--half)') + seg('skip', 'var(--skip)') + seg('away', 'var(--away)') + '</div></div></div>' +
-      '<svg class="flow" viewBox="0 0 390 44" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M292 0 C292 22 112 14 112 40" stroke="#1D4E9E" stroke-width="2.5" stroke-dasharray="6 6" stroke-linecap="round"/><path d="M292 0 C292 18 290 26 290 40" stroke="#1D4E9E" stroke-width="2.5" stroke-dasharray="6 6" stroke-linecap="round"/><circle cx="292" cy="3" r="5" fill="#1D4E9E"/><circle cx="112" cy="40" r="4" fill="#1D4E9E"/><circle cx="290" cy="40" r="4" fill="#1D4E9E"/></svg>' +
-      '<div class="tiles">' +
-      '<a class="tile main" href="#/today"><span class="ic">' + ic('list', 'lg') + '</span><span class="badge">' + n.houses + '</span><span><b>Deliver today</b><small>आज की डिलीवरी</small></span></a>' +
-      '<a class="tile" href="#/stock"><span class="ic">' + ic('can', 'lg') + '</span><span><b>Morning stock</b><small>सुबह का स्टॉक</small></span></a>' +
-      '<a class="tile" href="#/customers"><span class="ic">' + ic('users', 'lg') + '</span><span><b>Customers</b><small>ग्राहक · ' + active().length + '</small></span></a>' +
-      '<a class="tile" href="#/money"><span class="ic">' + ic('rupee', 'lg') + '</span><span><b>Collect money</b><small>पैसे लें</small></span></a>' +
-      '</div>' +
-      '<div class="duebar"><a class="duecard' + (dueN ? '' : ' ok') + '" href="#/money"><span class="dot" style="background:var(--' + (dueN ? 'skip' : 'given') + ')">' + ic(dueN ? 'alert' : 'check') + '</span>' +
-      '<span class="col"><span class="head" style="font-size:22px;font-weight:800">' + (dueN ? rupees(due) + ' ' + esc(t('due')) : esc(t('nobodyOwes'))) + '</span>' +
-      (dueN ? '<span class="muted" style="font-size:14px;font-weight:600">' + dueN + ' ' + esc(t('dueHouses')) + '</span>' : '') + '</span></a>' +
-      micBtn('mic') + '</div>';
-  }
-  const micBtn = (cls) => '<button class="' + cls + '" data-act="voice" aria-label="Speak a change">' + ic('mic') + '<span>' + esc(t('speak')) + '</span></button>';
-
-  function viewToday() {
-    const day = ui.day;
+  function viewRoute() {
+    const day = ui.day, today = todayStr();
     const all = sortRoute(active());
     const sectors = [...new Set(all.map((c) => c.sector || '').filter(Boolean))];
     if (ui.sector && !sectors.includes(ui.sector)) ui.sector = '';
-    const shown = all.filter((c) => (!ui.sector || c.sector === ui.sector) && dayInfo(c, day).st !== 'none' || ((c.sched || {}).type === 'demand' && (!ui.sector || c.sector === ui.sector)));
-    const n = todayCounts(day);
-    let html = '<div class="phead"><div class="row"><a class="iconbtn ghost" href="#/home" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a>' +
-      '<div class="col grow"><h1>' + esc(t('todayDelivery')) + '</h1><span class="sub">' + esc(dayLabel(day)) + '</span></div>' +
-      '<div class="col"><span class="big">' + n.houses + '</span><span class="sub" style="font-size:13px;text-align:right">' + esc(t('houses')) + '</span></div></div>' +
-      '<div class="row" style="gap:8px"><button class="iconbtn ghost" data-act="day" data-n="-1" aria-label="Previous day">' + ic('back') + '</button>' +
-      '<div class="note grow">' + (navigator.onLine ? ic('cloud', 'sm') + esc(t('saved')) : ic('nosig', 'sm') + esc(t('offline'))) + '</div>' +
-      '<button class="iconbtn ghost" data-act="day" data-n="1" aria-label="Next day">' + ic('next') + '</button></div></div>';
-    if (sectors.length > 1) {
-      html += '<div class="chips"><button class="chip' + (ui.sector ? '' : ' on') + '" data-act="sector" data-val="">' + esc(t('all')) + ' · ' + all.length + '</button>' +
-        sectors.map((s) => '<button class="chip' + (ui.sector === s ? ' on' : '') + '" data-act="sector" data-val="' + esc(s) + '">' + esc(s) + ' · ' + all.filter((c) => c.sector === s).length + '</button>').join('') + '</div>';
-    }
-    html += '<div class="legend"><span>' + esc(t('tap')) + '</span><span class="g">✓ ' + esc(t('given')) + '</span>›<span class="h">½ ' + esc(t('half')) + '</span>›<span class="s">✕ ' + esc(t('skip')) + '</span>›<span class="e">+ ' + esc(t('extra')) + '</span></div>';
+    const rows = all.filter((c) => !ui.sector || c.sector === ui.sector).map((c) => ({ c, i: houseState(c, day) })).filter((r) => r.i.st !== 'none' || r.i.ls.some((x) => x.i.demand));
+    const cnt = { pending: 0, done: 0, skip: 0, call: 0 };
+    rows.forEach((r) => cnt[rowKind(r.i)]++);
+    const u = mainUnit();
+    let total = 0, done = 0;
+    rows.forEach((r) => r.i.ls.forEach((x) => { total += x.i.qty; if (!x.i.pending) done += x.i.qty; }));
+    const houses = cnt.done + cnt.pending;
+    const pct = houses ? Math.round(100 * cnt.done / houses) : 0;
+    const val = (q, h) => (u ? fq(q) + '<small>' + esc(u) + '</small>' : h + '<small>' + esc(t('houses')) + '</small>');
+    const name = S.vendor.name.split(' ')[0] || S.vendor.name;
+
+    let html = appHead() +
+      '<div class="greet"><img src="' + heroImg + '" alt=""><span class="hi">' + esc(t('namaste')) + '</span><b>' + esc(name) + '</b><span class="d">' + esc(parse(today).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'short' })) + '</span></div>' +
+      '<div class="rtitle"><span class="grow"><h1>' + bi('route') + '</h1></span>' +
+      (sectors.length > 1 ? '<button class="secchip" data-act="sector">' + ic('pin', 'xs') + esc(ui.sector || t('allSectors')) + '</button>' : '') + '</div>' +
+      '<div class="daypills">' + [-1, 0, 1].map((n) => {
+        const d = addDays(day, n);
+        const lab = d === today ? t('today') + ', ' + dshort(d) : parse(d).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric' });
+        return '<button class="daypill' + (n === 0 ? ' on' : '') + '"' + (n ? ' data-act="day" data-n="' + n + '"' : ' aria-current="date"') + '>' + esc(lab) + '</button>';
+      }).join('') + '</div>';
+
     if (!active().length) {
-      html += '<div class="empty">' + esc(t('noCustomers')) + '<div class="btnrow"><a class="bigbtn" href="#/edit/new">' + ic('plus') + esc(t('addFirst')) + '</a></div></div>';
+      return html + '<div class="card empty">' + esc(t('noCustomers')) + '<div class="stack"><a class="btn block" href="#/edit/new">' + ic('plus') + esc(t('addFirst')) + '</a>' +
+        '<button class="btn line block" data-act="sample">' + esc(t('sample')) + '</button></div></div>';
     }
+
+    html += '<div class="stats"><div class="tri">' +
+      '<div class="stat"><span class="k">' + ic('can', 'xs') + esc(t('total')) + '</span><div class="v">' + val(total, houses) + '</div><span class="s">' + houses + ' ' + esc(t('houses')) + '</span></div>' +
+      '<div class="stat"><span class="k">' + ic('check', 'xs') + esc(t('doneW')) + '</span><div class="v">' + val(done, cnt.done) + '</div><span class="s">' + cnt.done + ' ' + esc(t('houses')) + ' (' + pct + '%)</span></div>' +
+      '<div class="stat"><span class="k">' + ic('clock', 'xs') + esc(t('left')) + '</span><div class="v">' + val(total - done, cnt.pending) + '</div><span class="s">' + cnt.pending + ' ' + esc(t('remaining')) + '</span></div></div>' +
+      '<div class="pbar"><span style="width:' + pct + '%"></span></div><div class="pnote"><span>' + esc(cnt.pending ? t('progress') : t('allDone')) + '</span><b>' + pct + '%</b></div></div>';
+
+    const F = [['', 'all', '', rows.length], ['pending', 'pending', 'var(--muted)', cnt.pending], ['done', 'delivered', 'var(--given)', cnt.done], ['skip', 'skipped', 'var(--skip)', cnt.skip]];
+    html += '<div class="chips">' + F.map(([k, lab, dot, n]) => '<button class="chip' + (ui.filter === k ? ' on' : '') + '" data-act="filter" data-val="' + k + '">' +
+      (dot ? '<span class="dotc" style="background:' + dot + '"></span>' : '') + esc(t(lab)) + '<span class="n">' + n + '</span></button>').join('') + '</div>';
+
+    const shown = rows.filter((r) => !ui.filter || rowKind(r.i) === ui.filter || (ui.filter === 'done' && rowKind(r.i) === 'call' && r.i.qty));
+    const next = rows.find((r) => r.i.pending);
     let lastSector = null;
-    html += '<div class="list">';
-    shown.forEach((c) => {
-      if ((c.sector || '') !== lastSector) {
-        lastSector = c.sector || '';
-        html += '</div><div class="section">' + ic('building', 'sm') + esc(lastSector || '—') + '</div><div class="list">';
+    shown.forEach((r) => {
+      if (sectors.length > 1 && !ui.sector && (r.c.sector || '') !== lastSector) {
+        lastSector = r.c.sector || '';
+        html += '<div class="secline">' + ic('pin', 'xs') + esc(lastSector || '—') + '</div>';
       }
-      html += deliveryRow(c, day);
+      html += routeRow(r.c, r.i, next && next.c === r.c);
     });
-    html += '</div>';
-    if (active().length) html += '<div class="pad" style="margin-top:18px"><button class="bigbtn red" style="width:100%;min-height:54px;font-size:17px" data-act="closed">' + esc(t('shopClosed')) + '</button></div>';
-    html += '<div class="bottom"><div class="in"><a class="bigbtn green" href="#/home">' + ic('check') + esc(t('allDone')) + '</a>' + micBtn('mic') + '</div></div>';
+    if (!shown.length) html += '<div class="empty">—</div>';
+    html += '<div class="stack" style="margin-top:22px"><button class="btn red block" data-act="closed">' + ic('pause') + esc(t('shopClosed')) + '</button></div>';
+
+    const leftQ = total - done;
+    html += '<div class="runbar"><div class="in"><span class="ico">' + ic('truck') + '</span><div class="txt"><b>' +
+      (cnt.pending ? cnt.pending + ' ' + esc(t('housesLeft')) : esc(t('allDone'))) + '</b><span>' + (cnt.pending && u ? fq(leftQ) + ' ' + esc(u) + ' ' + esc(t('toDeliver')) : esc(dayLabel(day))) + '</span></div>' +
+      '<button class="mic" data-act="voice" aria-label="' + esc(t('speak')) + '">' + ic('mic') + '</button>' +
+      (cnt.pending ? '<button class="end" data-act="endrun">' + ic('check', 'sm') + esc(t('endRun')) + '</button>' : '<span class="end done">' + ic('check', 'sm') + '</span>') + '</div></div>';
     return html;
   }
 
-  function deliveryRow(c, day) {
-    const i = dayInfo(c, day);
-    const p = prod(c.productId);
-    let btn;
-    if (i.st === 'away') {
-      btn = '<button class="sbtn small s-away" data-act="awayinfo" data-id="' + c.id + '"><span>' + esc(t('away')) + '</span><span style="font-size:12px;font-weight:600">' + esc(t('till')) + ' ' + esc(parse(i.till).toLocaleDateString(locale(), { day: 'numeric', month: 'short' })) + '</span></button>';
-    } else if (i.demand) {
-      btn = '<button class="sbtn ' + (i.qty ? 's-done' : 's-none') + '" data-act="cycle" data-id="' + c.id + '" aria-label="' + esc(c.name) + ': ' + fq(i.qty) + ' ' + esc(p.unit) + '"><span class="sym">' + (i.qty ? fq(i.qty) : '+') + '</span><span>' + esc(i.qty ? p.unit : '') + '</span></button>';
+  function statusPill(i) {
+    if (i.st === 'half') return '<span class="spill half">½ ' + esc(t('half')) + '</span>';
+    if (i.st === 'skip') return '<span class="spill skip">' + ic('close', 'xs') + esc(t('skipped')) + '</span>';
+    if (i.st === 'extra') return '<span class="spill extra">' + ic('plus', 'xs') + esc(t('extra')) + '</span>';
+    return '<span class="spill done">' + ic('check', 'xs') + esc(t('delivered')) + '</span>';
+  }
+  function rowNote(it, i, p) {
+    if (i.st === 'skip') return t('notGiven');
+    if (i.st === 'half') return t('half') + ' · ' + fq(i.qty) + ' ' + p.unit;
+    if (i.st === 'extra') return t('delivered') + ' ' + fq(i.qty) + ' ' + p.unit + ' (+' + fq(i.qty - (+it.qty || 0)) + ' ' + t('extra') + ')';
+    return t('delivered') + ' ' + fq(i.qty) + ' ' + p.unit;
+  }
+  function rowActions(it, p, d) {
+    const step = stepOf(p.unit);
+    return '<div class="acts"><button class="deliver" data-act="mark" data-s="done"' + d + '><span class="q">' + ic('check') + fq(it.qty) + ' ' + esc(p.unit) + '</span><small>' + esc(t('delivered')) + '</small></button>' +
+      '<button class="xtra" data-act="mark" data-s="extra"' + d + '>+' + fq(step) + ' ' + esc(p.unit) + '<small>' + esc(t('extra')) + '</small></button>' +
+      '<button class="half" data-act="mark" data-s="half"' + d + '>½<small>' + esc(t('half')) + '</small></button>' +
+      '<button class="skipc" data-act="mark" data-s="skip"' + d + '>' + ic('ban') + '<small>' + esc(t('skip')) + '</small></button></div>';
+  }
+  const itemChip = (it, p, demand) => '<span class="item">' + ic(p.unit === 'L' ? 'drop' : 'can', 'xs') + esc(p.name) + (demand ? '' : ' • ' + fq(it.qty) + ' ' + esc(p.unit)) + '</span>';
+  // Buttons for one item of a house; a house with several items shows one block per item.
+  function lineBody(c, it, i, multi) {
+    const p = prod(it.productId);
+    const open = ui.edit === lkey(c, it);
+    const d = ' data-id="' + c.id + '" data-line="' + it.id + '"';
+    let pill, body;
+    if (i.demand) {
+      pill = i.qty ? '<span class="spill done">' + ic('check', 'xs') + fq(i.qty) + ' ' + esc(p.unit) + '</span>' : '<span class="spill pending">' + ic('phone', 'xs') + esc(t('onCall')) + '</span>';
+      body = '<div class="acts"><button class="deliver" data-act="give"' + d + '><span class="q">' + ic('plus') + '1 ' + esc(p.unit) + '</span><small>' + esc(t('given')) + '</small></button>' +
+        (i.qty ? '<button class="skipc" data-act="clear"' + d + ' aria-label="' + esc(t('undo')) + '">' + ic('close') + '<small>' + esc(t('undo')) + '</small></button>' : '') + '</div>';
+    } else if (i.pending) {
+      pill = '<span class="spill pending">' + ic('clock', 'xs') + esc(t('pending')) + '</span>';
+      body = rowActions(it, p, d);
     } else {
-      const lk = LOOK[i.st];
-      const extra = i.st === 'extra' ? '+' + fq(i.qty - c.qty) : lk.sym;
-      btn = '<button class="sbtn ' + lk.cls + '" data-act="cycle" data-id="' + c.id + '" aria-label="' + esc(c.name) + ': ' + esc(t(lk.w)) + '"><span class="sym">' + extra + '</span><span>' + esc(t(lk.w)) + '</span></button>';
+      pill = statusPill(i);
+      body = (open ? rowActions(it, p, d) : '') + '<div class="rnote">' + ic('info', 'sm') + '<span class="grow">' + esc(rowNote(it, i, p)) + '</span><button class="linkbtn" data-act="change"' + d + '>' + esc(open ? t('close') : t('change')) + '</button></div>';
     }
-    return '<div class="drow b-' + i.st + (i.st === 'away' ? ' dim' : '') + '"><a class="flatb" href="#/c/' + c.id + '" style="text-decoration:none;color:inherit">' + esc(c.flat || '•') + '</a>' +
-      '<a class="col grow" href="#/c/' + c.id + '" style="text-decoration:none;color:inherit"><span class="nm">' + esc(c.name) + '</span><span class="q">' + esc(qtyText(c)) + '</span></a>' + btn + '</div>';
+    return multi ? '<div class="line"><div class="lhead">' + itemChip(it, p, i.demand) + pill + '</div>' + body + '</div>' : { pill, body };
+  }
+  function routeRow(c, h, isNext) {
+    const bal = balance(c, todayStr());
+    const multi = lines(c).length > 1;
+    const vis = h.ls.filter((x) => x.i.st !== 'none' || x.i.demand);
+    let pill, body;
+    if (h.st === 'away') {
+      pill = '<span class="spill away">' + ic('pause', 'xs') + esc(t('onVacation')) + '</span>';
+      body = '<div class="rnote amber">' + ic('info', 'sm') + '<span class="grow">' + esc(fill('pausedUntil', { d: dshort(h.till) })) + '</span><button class="linkbtn" data-act="resume" data-id="' + c.id + '">' + esc(t('resumeToday')) + '</button></div>';
+    } else if (!multi) {
+      const r = lineBody(c, vis[0].it, vis[0].i, false);
+      pill = r.pill; body = r.body;
+    } else {
+      pill = h.pending ? '<span class="spill pending">' + ic('clock', 'xs') + esc(t('pending')) + '</span>' : h.st === 'none' ? '' : statusPill(h);
+      body = vis.map((x) => lineBody(c, x.it, x.i, true)).join('');
+    }
+    if (isNext && c.phone) body += '<div class="rnote"><span class="grow">' + esc([c.flat, c.sector].filter(Boolean).join(', ')) + '</span><a class="callbtn" href="tel:' + esc(digits(c.phone)) + '">' + ic('phone', 'sm') + esc(t('call')) + '</a></div>';
+    const chips = multi ? '<span class="item">' + ic('can', 'xs') + lines(c).length + ' ' + esc(t('itemsN')) + '</span>' : itemChip(vis[0].it, prod(vis[0].it.productId), vis[0].i.demand);
+    return '<div class="rcard ' + h.st + (isNext ? ' next' : '') + '"><div class="rtop"><a class="flat" href="#/c/' + c.id + '">' + esc(c.flat || initials(c.name)) + '</a>' +
+      '<a class="who" href="#/c/' + c.id + '"><span class="nm"><span>' + esc(c.name) + '</span>' + (isNext ? '<span class="tag amber">' + esc(t('upNext')) + '</span>' : '') + '</span>' +
+      '<span class="meta">' + chips + (bal > 0.5 ? '<span class="duechip">+' + rupees(bal) + ' ' + esc(t('due')) + '</span>' : '') + '</span></a>' + pill + '</div>' + body + '</div>';
   }
 
   function viewCustomers() {
     const q = ui.q.trim().toLowerCase();
     const list = sortRoute(active()).filter((c) => !q || (c.name + ' ' + (c.flat || '') + ' ' + (c.sector || '')).toLowerCase().includes(q));
     const day = todayStr();
-    let html = '<div class="phead"><div class="row"><a class="iconbtn ghost" href="#/home" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a><div class="col grow"><h1>' + esc(t('customers')) + '</h1><span class="sub">ग्राहक · ' + active().length + '</span></div></div></div>' +
-      '<div class="searchbox"><input id="search" type="search" placeholder="' + esc(t('search')) + '" value="' + esc(ui.q) + '" aria-label="' + esc(t('search')) + '"></div><div class="list" style="margin-top:8px">';
-    if (!list.length) html += '<div class="empty">' + esc(t('noCustomers')) + '</div>';
+    const limit = +S.vendor.limit || 1e12;
+    let html = appHead() + '<div class="rtitle"><span class="grow"><h1>' + bi('customers') + '</h1></span><span class="tag pri">' + active().length + '</span></div>' +
+      '<label class="search">' + ic('users', 'sm') + '<input id="search" type="search" placeholder="' + esc(t('search')) + '" value="' + esc(ui.q) + '" aria-label="' + esc(t('search')) + '"></label>';
+    if (!list.length) html += '<div class="empty">' + esc(t('noCustomers')) + '<div class="stack"><a class="btn block" href="#/edit/new">' + ic('plus') + esc(t('addCustomer')) + '</a></div></div>';
     list.forEach((c) => {
       const b = balance(c, day);
-      html += '<a class="crow" href="#/c/' + c.id + '"><span class="flatb">' + esc(c.flat || '•') + '</span><span class="col grow"><span class="head" style="font-size:20px;font-weight:700">' + esc(c.name) + '</span><span class="muted" style="font-size:15px;font-weight:600">' + esc(qtyText(c)) + (c.sector ? ' · ' + esc(c.sector) : '') + '</span></span>' +
-        '<span class="amt' + (b > (+S.vendor.limit || 1e12) ? ' red' : '') + '">' + (b > 0.5 ? rupees(b) : '') + '</span></a>';
+      const away = pauseOn(c, day);
+      html += '<a class="ccard" href="#/c/' + c.id + '"><span class="flat">' + esc(c.flat || initials(c.name)) + '</span><span class="col grow"><span class="nm">' + esc(c.name) + '</span>' +
+        '<span class="sub">' + esc(qtyText(c)) + (c.sector ? ' · ' + esc(c.sector) : '') + '</span>' + (away ? '<span><span class="tag err">' + esc(t('onVacation')) + '</span></span>' : '') + '</span>' +
+        '<span class="amt' + (b > limit ? ' red' : '') + '">' + (b > 0.5 ? rupees(b) : '<span class="tag ok">' + ic('check', 'xs') + '</span>') + '</span></a>';
     });
-    html += '</div><div class="bottom"><div class="in"><a class="bigbtn" href="#/edit/new">' + ic('plus') + esc(t('addCustomer')) + '</a></div></div>';
     return html;
   }
 
+  function estimate(items) {
+    let total = 0, known = false;
+    items.forEach((x) => {
+      const per = { daily: 30, alt: 15, days: x.days.length * 30 / 7 }[x.type];
+      if (!per) return;
+      known = true;
+      total += per * x.qty * (x.rate === '' || x.rate == null ? +prod(x.pid).rate : +x.rate);
+    });
+    return known ? rupees(total) + ' ' + t('perMonth') : '—';
+  }
+  const formItem = (it) => ({ id: it.id || '', pid: it.productId || (S.products[0] || {}).id, qty: +it.qty || 1, type: (it.sched || {}).type || 'daily', days: ((it.sched || {}).days || [1, 3, 5]).slice(), rate: it.rate == null ? '' : it.rate });
+  function formFrom(id) {
+    const c = id === 'new' ? null : cust(id);
+    const preset = PRESETS[S.vendor.type] || PRESETS.milk;
+    return {
+      key: id,
+      f: c ? { name: c.name, phone: c.phone, flat: c.flat, sector: c.sector, opening: c.opening, start: c.start }
+        : { name: '', phone: '', flat: '', sector: ui.sector || '', opening: '', start: todayStr() },
+      items: c ? lines(c).map(formItem) : [formItem({ productId: (S.products[0] || {}).id, qty: preset.qty, sched: { type: preset.sched, days: [1, 3, 5] } })]
+    };
+  }
+  // Keeps typed text when the form re-draws after a button tap.
+  function snapForm() {
+    const F = ui.form; if (!F || !$('#f-name')) return;
+    ['name', 'phone', 'flat', 'sector', 'opening', 'start'].forEach((k) => { const el = $('#f-' + k); if (el) F.f[k] = el.value; });
+    F.items.forEach((x, n) => { const el = $('#f-rate-' + n); if (el) x.rate = el.value; });
+  }
+  const fld = (icon, fid, lab, val, attrs) => '<div class="field"><label for="' + fid + '">' + lab + '</label><div class="inp">' + ic(icon, 'sm') + '<input id="' + fid + '" value="' + esc(val == null ? '' : val) + '" ' + (attrs || 'autocomplete="off"') + '></div></div>';
+  function itemCard(x, n, count) {
+    const p = prod(x.pid);
+    const d = ' data-i="' + n + '"';
+    const types = [['daily', 'daily'], ['alt', 'alternate'], ['days', 'pickDays'], ['demand', 'onCall']];
+    const presets = p.unit === 'L' ? [0.5, 1, 1.5, 2, 3] : [1, 2, 3, 4, 5];
+    return '<div class="itemcard"><div class="head">' + ic(p.unit === 'L' ? 'drop' : 'can', 'sm') + '<span class="grow">' + esc(t('itemN')) + ' ' + (n + 1) + '</span>' +
+      (count > 1 ? '<button class="iconbtn" data-act="delitem"' + d + ' aria-label="' + esc(t('delete')) + '">' + ic('close', 'sm') + '</button>' : '') + '</div>' +
+      '<div class="field"><div class="pills">' + S.products.map((y) => '<button type="button" class="pill' + (y.id === x.pid ? ' on' : '') + '" data-act="fprod"' + d + ' data-val="' + y.id + '">' + esc(y.name) + ' (₹' + esc(y.rate) + '/' + esc(y.unit) + ')</button>').join('') + '</div></div>' +
+      '<div class="field"><span class="lab">' + esc(t('schedule')) + '</span><div class="seg">' + types.map(([k, lab]) => '<button type="button" class="' + (x.type === k ? 'on' : '') + '" data-act="sched"' + d + ' data-val="' + k + '">' + esc(t(lab)) + '</button>').join('') + '</div>' +
+      (x.type === 'days' ? '<div class="days7">' + WD().map((w, i) => '<button type="button" class="' + (x.days.includes(i) ? 'on' : '') + '" data-act="wday"' + d + ' data-val="' + i + '" aria-pressed="' + x.days.includes(i) + '">' + w + '</button>').join('') + '</div>' : '') + '</div>' +
+      (x.type === 'demand' ? '' : '<div class="field"><span class="lab">' + esc(t('qty')) + '</span><div class="qtybox"><div class="stepper"><button type="button" data-act="qty"' + d + ' data-n="-1" aria-label="Less">−</button>' +
+        '<div class="val"><output>' + fq(x.qty) + '</output><small>' + esc(p.unit) + '</small></div><button type="button" class="plus" data-act="qty"' + d + ' data-n="1" aria-label="More">+</button></div>' +
+        '<div class="presets">' + presets.map((v) => '<button type="button" class="' + (v === x.qty ? 'on' : '') + '" data-act="qtyset"' + d + ' data-val="' + v + '">' + fq(v) + ' ' + esc(p.unit) + '</button>').join('') + '</div></div></div>') +
+      fld('rupee', 'f-rate-' + n, esc(t('rate')), x.rate, 'type="number" inputmode="decimal" data-rate="' + n + '" placeholder="' + esc(p.rate) + '"') + '</div>';
+  }
   function viewEdit(id) {
     const isNew = id === 'new';
-    const preset = PRESETS[S.vendor.type] || PRESETS.milk;
-    const c = isNew ? { name: '', flat: '', sector: ui.sector || '', phone: '', productId: (S.products[0] || {}).id, qty: preset.qty, sched: { type: preset.sched, days: [1, 3, 5] }, rate: '', opening: '' } : cust(id);
-    if (!c) return viewNotFound();
-    ui.form = { type: c.sched.type, days: (c.sched.days || []).slice(), qty: +c.qty || 1 };
+    if (!isNew && !cust(id)) return viewNotFound();
+    if (!ui.form || ui.form.key !== id) ui.form = formFrom(id);
+    const F = ui.form, f = F.f;
     const sectors = [...new Set(active().map((x) => x.sector).filter(Boolean))];
-    const wd = S.vendor.lang === 'hi' ? ['र', 'सो', 'मं', 'बु', 'गु', 'शु', 'श'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-    const types = [['daily', 'daily'], ['alt', 'alternate'], ['days', 'pickDays'], ['demand', 'onCall']];
-    return '<div class="phead"><div class="row"><a class="iconbtn ghost" href="' + (isNew ? '#/customers' : '#/c/' + c.id) + '" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a><div class="col grow"><h1>' + esc(isNew ? t('addCustomer') : t('editCustomer')) + '</h1></div></div></div>' +
-      '<div class="form">' +
-      '<div class="field"><label for="f-name">' + esc(t('name')) + '</label><input id="f-name" value="' + esc(c.name) + '" autocomplete="off"></div>' +
-      '<div class="row" style="gap:10px;align-items:flex-end"><div class="field grow"><label for="f-flat">' + esc(t('flat')) + '</label><input id="f-flat" value="' + esc(c.flat) + '" autocomplete="off"></div>' +
-      '<div class="field grow"><label for="f-sector">' + esc(t('area')) + '</label><input id="f-sector" list="sectors" value="' + esc(c.sector) + '" autocomplete="off"><datalist id="sectors">' + sectors.map((s) => '<option value="' + esc(s) + '">').join('') + '</datalist></div></div>' +
-      '<div class="field"><label for="f-phone">' + esc(t('phone')) + '</label><input id="f-phone" type="tel" inputmode="tel" value="' + esc(c.phone) + '"></div>' +
-      '<div class="field"><label for="f-prod">' + esc(t('product')) + '</label><select id="f-prod">' + S.products.map((p) => '<option value="' + p.id + '"' + (p.id === c.productId ? ' selected' : '') + '>' + esc(p.name) + ' (₹' + esc(p.rate) + '/' + esc(p.unit) + ')</option>').join('') + '</select></div>' +
-      '<div class="field"><span class="lab">' + esc(t('schedule')) + '</span><div class="opts">' + types.map(([k, lab]) => '<button type="button" class="opt' + (ui.form.type === k ? ' on' : '') + '" data-act="sched" data-val="' + k + '">' + esc(t(lab)) + '</button>').join('') + '</div></div>' +
-      '<div class="field' + (ui.form.type === 'days' ? '' : ' hidden') + '" id="daysbox"><div class="days">' + wd.map((w, i) => '<button type="button" class="opt' + (ui.form.days.includes(i) ? ' on' : '') + '" data-act="wday" data-val="' + i + '" aria-pressed="' + ui.form.days.includes(i) + '">' + w + '</button>').join('') + '</div></div>' +
-      '<div class="field' + (ui.form.type === 'demand' ? ' hidden' : '') + '" id="qtybox"><span class="lab">' + esc(t('qty')) + '</span><div class="stepper"><button type="button" data-act="qty" data-n="-0.5" aria-label="Less">−</button><output id="f-qty">' + fq(ui.form.qty) + '</output><button type="button" data-act="qty" data-n="0.5" aria-label="More">+</button></div></div>' +
-      '<div class="row" style="gap:10px;align-items:flex-start"><div class="field grow"><label for="f-rate">' + esc(t('rate')) + '</label><input id="f-rate" type="number" inputmode="decimal" placeholder="' + esc(prod(c.productId).rate) + '" value="' + esc(c.rate) + '"></div>' +
-      '<div class="field grow"><label for="f-open">' + esc(t('oldDue')) + '</label><input id="f-open" type="number" inputmode="decimal" placeholder="0" value="' + esc(c.opening) + '"></div></div>' +
-      '<div class="btnrow"><button class="bigbtn" data-act="savecust" data-id="' + (isNew ? '' : c.id) + '">' + ic('check') + esc(t('save')) + '</button></div>' +
-      (isNew ? '' : '<div class="btnrow"><button class="bigbtn red" data-act="delcust" data-id="' + c.id + '">' + esc(t('delete')) + '</button></div>') +
-      '</div>';
+    const opt = ' <small>' + esc(t('optional')) + '</small>';
+    return pageHead(isNew ? t('addCustomer') : t('editCustomer'), isNew ? other('addCustomer') : f.name, isNew ? '#/home' : '#/c/' + id) +
+      '<div class="card"><div class="ctitle">' + ic('user') + '<h2>' + esc(t('details')) + '</h2></div>' +
+      fld('user', 'f-name', esc(t('name')), f.name) +
+      fld('phone', 'f-phone', esc(t('phone')) + opt, f.phone, 'type="tel" inputmode="tel"') +
+      '<div class="row" style="gap:10px;align-items:flex-end"><div class="grow">' + fld('building', 'f-flat', esc(t('flat')), f.flat) + '</div>' +
+      '<div class="grow">' + fld('pin', 'f-sector', esc(t('area')), f.sector, 'list="sectors" autocomplete="off"') + '</div></div>' +
+      '<datalist id="sectors">' + sectors.map((x) => '<option value="' + esc(x) + '">').join('') + '</datalist>' +
+      (isNew ? fld('cal', 'f-start', esc(t('firstDay')), f.start, 'type="date"') : '') +
+      fld('wallet', 'f-opening', esc(t('oldDue')), f.opening, 'type="number" inputmode="decimal" placeholder="0"') + '</div>' +
+      '<div class="card"><div class="ctitle">' + ic('truck') + '<h2>' + esc(t('deliverySetup')) + '</h2></div>' +
+      F.items.map((x, n) => itemCard(x, n, F.items.length)).join('') +
+      '<button class="btn line block" style="margin-top:14px" data-act="additem">' + ic('plus') + esc(t('addAnother')) + '</button></div>' +
+      '<div class="est"><span>' + esc(t('estMonthly')) + '</span><b id="f-est">' + esc(estimate(F.items)) + '</b></div>' +
+      '<button class="btn big block" data-act="savecust" data-id="' + (isNew ? '' : id) + '">' + ic('check') + esc(t('save')) + '</button>' +
+      (isNew ? '' : '<div class="stack"><button class="btn red block" data-act="delcust" data-id="' + id + '">' + esc(t('delete')) + '</button></div>');
   }
 
   function calendarHtml(cells, interactive) {
-    const wd = S.vendor.lang === 'hi' ? ['र', 'सो', 'मं', 'बु', 'गु', 'शु', 'श'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-    return '<div class="cal"><div class="wd">' + wd.map((w) => '<span>' + w + '</span>').join('') + '</div><div class="grid">' +
+    return '<div class="cal"><div class="wd">' + WD().map((w) => '<span>' + w + '</span>').join('') + '</div><div class="grid">' +
       cells.map((x) => {
         if (!x) return '<span class="cell"></span>';
         const inner = '<span class="n">' + x.n + '</span><span class="d ' + (x.future ? 'future' : LOOK[x.st].cls) + '">' + (x.future ? '' : (x.label != null ? x.label : LOOK[x.st].sym)) + '</span>';
@@ -323,7 +474,7 @@
   }
   function legendHtml(counts) {
     return '<div class="lgd">' + ['done', 'extra', 'half', 'skip', 'away'].map((k) =>
-      '<div><span class="row" style="gap:5px"><span class="d ' + LOOK[k].cls + '">' + LOOK[k].sym + '</span><b>' + counts[k] + '</b></span><small>' + esc(t(LOOK[k].w)) + '</small></div>').join('') + '</div>';
+      '<div><span class="d ' + LOOK[k].cls + '">' + LOOK[k].sym + '</span><b>' + counts[k] + '</b><small>' + esc(t(LOOK[k].w)) + '</small></div>').join('') + '</div>';
   }
   function monthCells(c, ym) {
     const first = parse(monthStart(ym)), lastDay = +monthEnd(ym).slice(8), today = todayStr();
@@ -341,86 +492,145 @@
     }
     return { cells, counts, codes };
   }
+  const LOGTAG = { done: 'ok', extra: 'blue', half: 'amber', skip: 'err', away: 'err', none: '' };
 
   function viewCustomer(id, ym) {
     const c = cust(id);
     if (!c) return viewNotFound();
     ym = ym || monthOf(todayStr());
     ui.month = ym;
-    const p = prod(c.productId);
+    const today = todayStr();
+    const ls = lines(c);
+    const single = ls.length === 1 ? prod(ls[0].productId) : null;
     const { cells, counts } = monthCells(c, ym);
     const b = monthBill(c, ym);
-    const pays = S.payments.filter((x) => x.cid === c.id && monthOf(x.date) === ym);
-    let html = '<div class="minihero withback"><div class="sun"></div><img src="' + heroImg + '" alt=""><a class="iconbtn back" href="#/customers" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a>' +
-      '<h1>' + esc(c.name) + '</h1><span class="muted" style="font-weight:600">' + esc([c.flat, c.sector].filter(Boolean).join(' · ')) + '</span><span class="muted" style="font-weight:600">' + esc(qtyText(c)) + '</span></div>' +
-      '<div class="monthnav"><a class="iconbtn" href="#/c/' + c.id + '/' + shiftMonth(ym, -1) + '" aria-label="Previous month">' + ic('back') + '</a><div class="t"><b>' + esc(monthLabel(ym)) + '</b><span class="muted" style="font-size:14px;font-weight:600">' + esc(t('tapDay')) + '</span></div>' +
-      '<a class="iconbtn" href="#/c/' + c.id + '/' + shiftMonth(ym, 1) + '" aria-label="Next month">' + ic('next') + '</a></div>' +
-      calendarHtml(cells, true) + legendHtml(counts) +
-      '<div class="card"><div class="kv"><span>' + fq(b.qty) + ' ' + esc(p.unit) + ' × ₹' + fq(rateOf(c)) + '</span><span>' + rupees(b.amount) + '</span></div>' +
-      '<div class="kv"><span>' + esc(t('oldDueShort')) + '</span><span>' + (b.old < 0 ? '− ' + rupees(-b.old) : '+ ' + rupees(b.old)) + '</span></div>' +
-      '<div class="kv"><span>' + esc(t('paid')) + '</span><span style="color:var(--given)">− ' + rupees(b.paid) + '</span></div>' +
-      '<div class="total"><b>' + esc(t('toPay')) + '</b><strong>' + rupees(Math.max(0, b.due)) + '</strong></div>' +
-      (pays.length ? '<div class="muted" style="font-size:14px;margin-top:6px">' + pays.map((x) => esc(parse(x.date).toLocaleDateString(locale(), { day: 'numeric', month: 'short' })) + ': ' + rupees(x.amt) + ' ' + esc(t(x.mode))).join(' · ') + '</div>' : '') +
-      '</div>' +
-      '<div class="navrow"><button class="bigbtn" data-act="pay" data-id="' + c.id + '">' + ic('rupee') + esc(t('recordPayment')) + '</button></div>' +
-      '<div class="navrow"><a class="bigbtn green" target="_blank" rel="noopener" href="' + esc(waLink(c.phone, billText(c, ym))) + '">' + ic('chat') + esc(t('sendWhatsApp')) + '</a></div>' +
-      '<div class="navrow"><button class="bigbtn line" data-act="pausesheet" data-id="' + c.id + '">' + ic('pause') + esc(t('pause')) + '</button><a class="bigbtn line" href="#/edit/' + c.id + '">' + ic('edit') + esc(t('editCustomer')) + '</a></div>' +
-      '<div class="navrow"><button class="bigbtn line" data-act="copylink" data-id="' + c.id + '">' + ic('link') + esc(t('custLink')) + '</button></div>';
+    const pz = (c.pauses || []).filter((x) => x.to >= today).sort((a, z) => a.from.localeCompare(z.from))[0];
+    const pays = S.payments.filter((x) => x.cid === c.id).sort((a, z) => z.date.localeCompare(a.date)).slice(0, 3);
+    let html = pageHead(t('khata'), S.vendor.name, '#/customers') +
+      '<div class="card"><div class="profile"><span class="av big">' + esc(initials(c.name)) + '</span><div class="grow"><h2>' + esc(c.name) + '</h2>' +
+      '<div class="sub">' + esc([c.flat, c.sector].filter(Boolean).join(' · ')) + '</div>' + (c.phone ? '<div class="sub row" style="gap:5px">' + ic('phone', 'xs') + esc(c.phone) + '</div>' : '') + '</div>' +
+      '<a class="iconbtn" href="#/edit/' + c.id + '" aria-label="' + esc(t('editCustomer')) + '">' + ic('edit', 'sm') + '</a></div>' +
+      (c.phone ? '<div class="btns"><a class="btn soft" href="tel:' + esc(digits(c.phone)) + '">' + ic('phone', 'sm') + esc(t('call')) + '</a><a class="btn lav" target="_blank" rel="noopener" href="https://wa.me/' + esc(waPhone(c.phone)) + '">' + ic('chat', 'sm') + 'WhatsApp</a></div>' : '') + '</div>' +
+      '<div class="hero"><div class="lab">' + esc(t('totalOutstanding')) + ' · ' + esc(other('totalOutstanding')) + '</div><div class="big">' + rupees(Math.max(0, b.due)) + '<small>' + esc(b.due < -0.5 ? rupees(-b.due) + ' ' + t('advance') : t('toPay')) + '</small></div>' +
+      '<div class="brk">' + b.lines.map((x) => '<div><span>' + esc((ls.length > 1 ? x.p.name : monthLabel(ym)) + ' · ' + fq(x.qty) + ' ' + x.p.unit + ' × ₹' + fq(x.rate)) + '</span><b>' + rupees(x.amount) + '</b></div>').join('') +
+      '<div><span>' + esc(t('oldDueShort')) + '</span><b>' + (b.old < 0 ? '− ' + rupees(-b.old) : rupees(b.old)) + '</b></div><div><span>' + esc(t('paid')) + '</span><b>− ' + rupees(b.paid) + '</b></div></div>' +
+      '<div class="stack"><button class="btn white" data-act="pay" data-id="' + c.id + '">' + ic('wallet') + esc(t('collect')) + '</button>' +
+      '<a class="btn lav" target="_blank" rel="noopener" href="' + esc(waLink(c.phone, billText(c, ym))) + '">' + ic('chat') + esc(t('sendWhatsApp')) + '</a></div></div>';
+
+    html += '<div class="card"><div class="ctitle">' + ic('can') + '<h2 class="grow">' + esc(t('subscription')) + '<small>' + esc(other('subscription')) + '</small></h2><a class="tag lav" href="#/edit/' + c.id + '">' + ic('plus', 'xs') + esc(t('addItem')) + '</a></div>';
+    ls.forEach((it, n) => {
+      const p = prod(it.productId); const s = it.sched || { type: 'daily' };
+      html += '<div class="sub-item"' + (n ? ' style="margin-top:10px"' : '') + '><span class="ic">' + ic(p.unit === 'L' ? 'drop' : 'can') + '</span><div class="grow"><b style="font-size:17px">' + esc(p.name) + '</b><div class="muted" style="font-size:14px;font-weight:600">₹' + fq(rateOf(it)) + ' / ' + esc(p.unit) + '</div></div>' +
+        '<div class="q">' + (s.type === 'demand' ? '—' : fq(it.qty) + ' ' + esc(p.unit)) + '<small>' + esc(schedLabel(it)) + '</small></div></div>';
+      if (s.type === 'days') html += '<div class="wk" style="margin-top:8px">' + [1, 2, 3, 4, 5, 6, 0].map((d) => '<span class="' + ((s.days || []).includes(d) ? 'on' : '') + '">' + WD()[d] + '</span>').join('') + '</div>';
+    });
+    html += '<button class="rowlink" data-act="pausesheet" data-id="' + c.id + '">' + ic('pause') + '<span class="grow">' + esc(pz ? dshort(pz.from) + ' – ' + dshort(pz.to) + ' · ' + t('onVacation') : t('pauseDelivery')) + '</span>' + ic('next', 'sm') + '</button></div>';
+
+    html += '<div class="card"><div class="ctitle"><h2 class="grow">' + esc(t('dailyLog')) + '<small>' + esc(other('dailyLog')) + '</small></h2></div><div class="log">';
+    for (let k = 0; k < 5; k++) {
+      const day = addDays(today, -k);
+      if (c.start && day < c.start) break;
+      const i = dayInfo(c, day);
+      const tag = i.st === 'none' ? t('noDelivery') : t(LOOK[i.st].w);
+      html += '<button class="logrow ' + i.st + (k === 0 ? ' today' : '') + '" data-act="cycleday" data-day="' + day + '"><span class="dn">' + +day.slice(8) + '</span>' +
+        '<span class="grow col"><span class="dt">' + esc(parse(day).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })) + '</span><span><span class="tag ' + LOGTAG[i.st] + '">' + esc(tag) + '</span></span></span>' +
+        '<span class="qq">' + (single ? fq(i.qty) + ' ' + esc(single.unit) : rupees(i.amt)) + '<small>' + (single ? rupees(i.amt) : '') + '</small></span></button>';
+    }
+    html += '</div></div>';
+
+    html += '<div class="card"><div class="monthnav"><a class="iconbtn round" href="#/c/' + c.id + '/' + shiftMonth(ym, -1) + '" aria-label="Previous month">' + ic('back') + '</a><div class="t"><b>' + esc(monthLabel(ym)) + '</b><span>' + esc(t('tapDay')) + '</span></div>' +
+      '<a class="iconbtn round" href="#/c/' + c.id + '/' + shiftMonth(ym, 1) + '" aria-label="Next month">' + ic('next') + '</a></div>' + calendarHtml(cells, true) + legendHtml(counts) + '</div>';
+
+    html += '<div class="card"><div class="ctitle"><h2 class="grow">' + esc(t('recentPay')) + '<small>' + esc(other('recentPay')) + '</small></h2></div><div class="log">' +
+      (pays.length ? pays.map((x) => '<div class="payrow"><span class="ic">' + ic(x.mode === 'cash' ? 'wallet' : 'qr', 'sm') + '</span><div class="grow"><b>' + rupees(x.amt) + '</b> <span class="tag pri">' + esc(t(x.mode)) + '</span><div class="muted" style="font-size:13px;font-weight:600">' + esc(dshort(x.date)) + '</div></div></div>').join('')
+        : '<div class="muted" style="font-weight:600">' + esc(t('noPayments')) + '</div>') + '</div></div>' +
+      '<div class="stack"><button class="btn line block" data-act="copylink" data-id="' + c.id + '">' + ic('link') + esc(t('custLink')) + '</button></div>';
     return html;
   }
 
-  function viewMoney() {
-    const day = todayStr();
+  function viewBilling() {
+    const today = todayStr();
+    const ym = ui.bym || monthOf(today);
     const limit = +S.vendor.limit || 0;
-    const rows = active().map((c) => ({ c, b: balance(c, day) })).filter((x) => x.b > 0.5).sort((a, b) => b.b - a.b);
-    const total = rows.reduce((a, x) => a + x.b, 0);
-    const todays = S.payments.filter((p) => p.date === day);
-    const cash = todays.filter((p) => p.mode === 'cash').reduce((a, p) => a + +p.amt, 0);
-    const other = todays.reduce((a, p) => a + +p.amt, 0) - cash;
-    let html = '<div class="phead"><div class="row"><a class="iconbtn ghost" href="#/home" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a><div class="col grow"><h1>' + esc(t('money')) + '</h1><span class="sub">' + esc(dayLabel(day)) + '</span></div></div></div>' +
-      '<div class="card"><div class="kv"><span>' + esc(t('totalDue')) + '</span><span class="head" style="font-size:26px;color:var(--skip)">' + rupees(total) + '</span></div>' +
-      '<div class="kv"><span>' + esc(t('collectedToday')) + '</span><span class="head" style="font-size:22px;color:var(--given)">' + rupees(cash + other) + '</span></div>' +
-      '<div class="kv"><span>' + esc(t('cashInHand')) + '</span><span>' + rupees(cash) + ' ' + esc(t('cash')) + ' · ' + rupees(other) + ' UPI/' + esc(t('bank')) + '</span></div></div>' +
-      '<div class="section">' + ic('alert', 'sm') + esc(t('due')) + ' · ' + rows.length + ' ' + esc(t('houses')) + '</div><div class="list">';
-    if (!rows.length) html += '<div class="empty">' + esc(t('nobodyOwes')) + '</div>';
+    const list = active();
+    const bills = list.map((c) => ({ c, b: monthBill(c, ym) }));
+    const billed = bills.reduce((a, x) => a + x.b.amount, 0);
+    const collected = bills.reduce((a, x) => a + x.b.paid, 0);
+    const pending = bills.reduce((a, x) => a + Math.max(0, x.b.due), 0);
+    const pendN = bills.filter((x) => x.b.due > 0.5).length;
+    const pct = collected + pending ? Math.round(100 * collected / (collected + pending)) : 100;
+    const todays = S.payments.filter((x) => x.date === today);
+    const cash = todays.filter((x) => x.mode === 'cash').reduce((a, x) => a + +x.amt, 0);
+    const got = todays.reduce((a, x) => a + +x.amt, 0);
+    const rows = list.map((c) => ({ c, b: balance(c, today) })).filter((x) => x.b > 0.5).sort((a, z) => z.b - a.b);
+    let html = appHead() +
+      '<div class="card"><div class="monthnav"><button class="iconbtn round" data-act="bmonth" data-n="-1" aria-label="Previous month">' + ic('back') + '</button><div class="t"><b>' + esc(monthLabel(ym)) + '</b><span>' + esc(dshort(monthStart(ym)) + ' – ' + dshort(monthEnd(ym))) + '</span></div>' +
+      '<button class="iconbtn round" data-act="bmonth" data-n="1" aria-label="Next month">' + ic('next') + '</button></div></div>' +
+      '<div class="hero"><div class="lab">' + esc(other('totalBilling')) + '</div><h2 style="font-size:24px;font-weight:800;position:relative;z-index:1">' + esc(t('totalBilling')) + '</h2>' +
+      '<div class="big">' + rupees(billed) + '<small>/ ' + list.length + ' ' + esc(t('accounts')) + '</small></div>' +
+      '<div class="brk"><div><span>' + esc(t('recovery')) + '</span><b>' + pct + '% ' + esc(t('collected')) + '</b></div><div class="pbar" style="margin:8px 0 4px;background:rgba(255,255,255,.18)"><span style="width:' + pct + '%;background:var(--lav)"></span></div></div></div>' +
+      '<div class="duo"><div class="card"><div class="k">' + esc(t('doneK')) + '<span class="tag ok">' + ic('check', 'xs') + '</span></div><div class="v" style="color:var(--ok)">' + rupees(collected) + '</div><div class="s">' + (list.length - pendN) + ' ' + esc(t('paidUp')) + '</div></div>' +
+      '<div class="card"><div class="k">' + esc(t('pendingK')) + '<span class="tag err">' + ic('clock', 'xs') + '</span></div><div class="v" style="color:var(--err)">' + rupees(pending) + '</div><div class="s">' + pendN + ' ' + esc(t('accountsDue')) + '</div></div></div>' +
+      '<div class="sectionh"><h2>' + esc(t('billingOps')) + '</h2></div><div class="ops">' +
+      '<button class="op pri" data-act="duesheet">' + ic('chat') + '<span>' + esc(t('sendDues')) + '<small>' + rows.length + ' ' + esc(t('payLinks')) + '</small></span></button>' +
+      '<div class="op">' + ic('wallet') + '<span>' + rupees(got) + ' ' + esc(t('collectedToday')) + '<small>' + rupees(cash) + ' ' + esc(t('cash')) + ' · ' + rupees(got - cash) + ' UPI</small></span></div>' +
+      '<a class="op" href="#/stock">' + ic('can') + '<span>' + esc(t('stock')) + '<small>' + esc(t('stockSub')) + '</small></span></a></div>';
+
+    html += '<div class="sectionh"><h2>' + esc(t('overdue')) + ' <span class="tag err">' + rows.length + '</span></h2><small>' + esc(other('overdue')) + '</small></div>';
+    if (!rows.length) html += '<div class="card empty">' + esc(t('nobodyOwes')) + '</div>';
     rows.forEach(({ c, b }) => {
       const over = limit && b > limit;
-      html += '<div class="crow" style="' + (over ? 'border-color:var(--skip)' : '') + '"><a class="flatb" href="#/c/' + c.id + '" style="text-decoration:none;color:inherit">' + esc(c.flat || '•') + '</a>' +
-        '<a class="col grow" href="#/c/' + c.id + '" style="text-decoration:none;color:inherit"><span class="head" style="font-size:20px;font-weight:700">' + esc(c.name) + '</span>' +
-        (over ? '<span style="color:var(--skip);font-weight:700;font-size:14px">' + esc(t('overLimit')) + '</span>' : '<span class="muted" style="font-size:14px">' + esc(c.sector || '') + '</span>') + '</a>' +
-        '<button class="sbtn small s-done" style="width:110px" data-act="pay" data-id="' + c.id + '"><span class="head" style="font-size:19px">' + rupees(b) + '</span><span style="font-size:12px">' + esc(t('received')) + '</span></button></div>';
+      const lp = S.payments.filter((x) => x.cid === c.id).sort((a, z) => z.date.localeCompare(a.date))[0];
+      const since = diffDays(lp ? lp.date : (c.start || today), today);
+      html += '<div class="odcard"><div class="top"><a class="av' + (over ? ' red' : '') + '" href="#/c/' + c.id + '">' + esc(initials(c.name)) + '</a>' +
+        '<a class="grow col" href="#/c/' + c.id + '"><b style="font-size:17px">' + esc(c.name) + '</b><span class="muted" style="font-size:14px;font-weight:600">' + esc([c.flat, qtyText(c)].filter(Boolean).join(' • ')) + '</span></a>' +
+        '<div class="amtcol"><button class="amt red" data-act="pay" data-id="' + c.id + '">' + rupees(b) + '</button><span class="tag ' + (over ? 'err' : 'amber') + '">' + esc(over ? t('overLimit') : since + ' ' + t('daysSince')) + '</span></div></div>' +
+        '<div class="foot">' + ic('clock', 'xs') + '<span class="grow">' + esc(lp ? t('lastPaid') + ': ' + dshort(lp.date) + ' (' + rupees(lp.amt) + ')' : t('noPayments')) + '</span>' +
+        '<a class="ping" target="_blank" rel="noopener" href="' + esc(waLink(c.phone, billText(c, monthOf(today)))) + '">' + ic('chat', 'sm') + esc(t('ping')) + '</a></div></div>';
     });
-    return html + '</div>';
+
+    html += '<div class="sectionh"><div><h2>' + esc(t('rates')) + '</h2><small>' + esc(other('rates')) + '</small></div><button class="iconbtn round" data-act="addprod" aria-label="' + esc(t('addItem')) + '">' + ic('plus') + '</button></div>';
+    S.products.forEach((x) => {
+      const homes = list.filter((c) => lines(c).some((it) => it.productId === x.id)).length;
+      html += '<div class="prow"><span class="ic">' + ic(x.unit === 'L' ? 'drop' : 'can') + '</span><div class="grow"><b>' + esc(x.name) + '</b><div class="muted" style="font-size:13px;font-weight:600">' + homes + ' ' + esc(t('activeHomes')) + '</div>' +
+        '<div class="r">₹' + esc(x.rate) + ' / ' + esc(x.unit) + '</div></div><button class="editrate" data-act="ratesheet" data-id="' + x.id + '">' + ic('edit', 'xs') + esc(t('editRate')) + '</button></div>';
+    });
+    html += '<div class="stack" style="margin-top:20px"><button class="btn big block" data-act="paypick">' + ic('rupee') + esc(t('recordPayment')) + '</button></div>';
+    return html;
   }
 
   function stockFor(day) {
     const per = {};
     let extra = 0, away = 0, awayHouses = 0, extraHouses = 0;
     active().forEach((c) => {
-      const i = dayInfo(c, day);
-      const p = prod(c.productId);
-      const k = p.id || p.name;
-      per[k] = per[k] || { p, qty: 0 };
-      per[k].qty += i.qty;
-      if (i.st === 'extra') { extra += i.qty - c.qty; extraHouses++; }
-      if (i.st === 'away' && (c.sched || {}).type !== 'demand' && isScheduled(c, day)) { away += +c.qty; awayHouses++; }
+      let ex = false, aw = false;
+      lines(c).forEach((it) => {
+        const i = lineInfo(c, it, day);
+        const p = prod(it.productId);
+        const k = p.id || p.name;
+        per[k] = per[k] || { p, qty: 0 };
+        per[k].qty += i.qty;
+        if (i.st === 'extra') { extra += i.qty - (isScheduled(c, it, day) ? +it.qty : 0); ex = true; }
+        if (i.st === 'away' && (it.sched || {}).type !== 'demand' && isScheduled(c, it, day)) { away += +it.qty; aw = true; }
+      });
+      if (ex) extraHouses++;
+      if (aw) awayHouses++;
     });
     return { items: Object.values(per).filter((x) => x.qty > 0), extra, away, awayHouses, extraHouses };
   }
   function canSvg(f) {
     const h = Math.round(26 * f);
-    return '<svg width="34" height="46" viewBox="0 0 34 46" fill="none" aria-hidden="true"><rect x="11" y="1" width="12" height="5" rx="1.5" fill="#4B5670"/><path d="M12 6v4l-7 5v27a3 3 0 0 0 3 3h18a3 3 0 0 0 3-3V15l-7-5V6" stroke="#4B5670" stroke-width="2.2" stroke-linejoin="round"/><rect x="7.5" y="' + (41 - h) + '" width="19" height="' + h + '" rx="2" fill="#1D4E9E"/></svg>';
+    return '<svg width="34" height="46" viewBox="0 0 34 46" fill="none" aria-hidden="true"><rect x="11" y="1" width="12" height="5" rx="1.5" fill="#7A7585"/><path d="M12 6v4l-7 5v27a3 3 0 0 0 3 3h18a3 3 0 0 0 3-3V15l-7-5V6" stroke="#7A7585" stroke-width="2.2" stroke-linejoin="round"/><rect x="7.5" y="' + (41 - h) + '" width="19" height="' + h + '" rx="2" fill="#3D348B"/></svg>';
   }
   function viewStock() {
     const day = ui.stockDay === 'tomorrow' ? addDays(todayStr(), 1) : todayStr();
     const s = stockFor(day);
     const litres = s.items.filter((x) => x.p.unit === 'L').reduce((a, x) => a + x.qty, 0);
-    let html = '<div class="minihero withback"><div class="sun"></div><img src="' + heroImg + '" alt=""><a class="iconbtn back" href="#/home" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a>' +
-      '<h1>' + esc(t('stock')) + '</h1><span class="muted" style="font-weight:600">' + esc(dayLabel(day)) + '</span></div>' +
-      '<div class="chips"><button class="chip' + (ui.stockDay === 'today' ? ' on' : '') + '" data-act="stockday" data-val="today">' + esc(t('today')) + '</button><button class="chip' + (ui.stockDay === 'tomorrow' ? ' on' : '') + '" data-act="stockday" data-val="tomorrow">' + esc(t('tomorrow')) + '</button></div>';
-    html += '<div class="totalcard"><div class="col"><span style="font-weight:600;opacity:.9">' + esc(t('totalMilk')) + '</span><strong>' + (litres ? fq(litres) + ' L' : s.items.length ? fq(s.items[0].qty) + ' ' + esc(s.items[0].p.unit) : '0') + '</strong></div>' +
-      '<button class="round" data-act="speakstock" aria-label="' + esc(t('readAloud')) + '">' + ic('speaker') + '<span>' + esc(t('readAloud')) + '</span></button></div>';
-    html += '<div class="list" style="margin-top:12px">';
+    let html = appHead() + '<div class="rtitle"><span class="grow"><h1>' + bi('stock') + '</h1></span></div>' +
+      '<div class="seg"><button class="' + (ui.stockDay === 'today' ? 'on' : '') + '" data-act="stockday" data-val="today">' + esc(t('today')) + '</button><button class="' + (ui.stockDay === 'tomorrow' ? 'on' : '') + '" data-act="stockday" data-val="tomorrow">' + esc(t('tomorrow')) + '</button></div>' +
+      '<div class="hero"><div class="stockhero"><div class="grow"><div class="lab">' + esc(t('totalMilk')) + ' · ' + esc(dayLabel(day)) + '</div><div class="big">' +
+      (litres ? fq(litres) + ' L' : s.items.length ? fq(s.items[0].qty) + ' ' + esc(s.items[0].p.unit) : '0') + '</div></div>' +
+      '<button class="listen" data-act="speakstock" aria-label="' + esc(t('readAloud')) + '">' + ic('speaker') + esc(t('readAloud')) + '</button></div></div>';
     s.items.forEach((x) => {
       let cans = '';
       if (x.p.unit === 'L') {
@@ -428,36 +638,33 @@
         while (left >= 40) { arr.push(1); left -= 40; }
         if (left > 0) arr.push(left / 40);
         const full = arr.filter((f) => f === 1).length;
-        cans = '<div class="cans">' + arr.map(canSvg).join('') + '<span class="muted" style="font-weight:600;margin-left:6px">' + [full ? full + ' ' + (full === 1 ? t('can') : t('cans')) : '', left > 0 ? fq(left) + ' L' : ''].filter(Boolean).map(esc).join(' + ') + ' (40 L)</span></div>';
+        cans = '<div class="cans">' + arr.map(canSvg).join('') + '<span class="muted" style="font-weight:600;margin-left:6px">' + [full ? full + ' ' + (full === 1 ? t('can') : t('cans')) : '', left > 0 ? fq(left) + ' L' : ''].filter(Boolean).map(esc).join(' + ') + (full ? ' · 40 L ' + esc(t('cans')) : '') + '</span></div>';
       }
-      html += '<div class="card" style="margin:0"><div class="kv" style="align-items:baseline"><span class="head" style="font-size:21px;color:var(--ink)">' + esc(x.p.name) + '</span><span class="head" style="font-size:32px">' + fq(x.qty) + ' ' + esc(x.p.unit) + '</span></div>' + cans + '</div>';
+      html += '<div class="prow" style="flex-wrap:wrap"><span class="ic">' + ic(x.p.unit === 'L' ? 'drop' : 'can') + '</span><b class="grow">' + esc(x.p.name) + '</b><span style="font-size:28px;font-weight:800;color:var(--pri)">' + fq(x.qty) + ' ' + esc(x.p.unit) + '</span>' + (cans ? '<div style="flex-basis:100%">' + cans + '</div>' : '') + '</div>';
     });
-    if (!s.items.length) html += '<div class="empty">0</div>';
-    html += '</div><div class="pad" style="margin-top:12px;display:flex;flex-direction:column;gap:6px;font-weight:600">';
-    if (s.extra) html += '<div class="row"><span class="d s-extra" style="width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff">+</span>' + fq(s.extra) + ' ' + esc(t('extraAsked')) + ' · ' + s.extraHouses + ' ' + esc(s.extraHouses === 1 ? t('house') : t('houses')) + '</div>';
-    if (s.away) html += '<div class="row"><span class="d s-away" style="width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff">॥</span>' + fq(s.away) + ' ' + esc(t('lessAway')) + ' · ' + s.awayHouses + ' ' + esc(s.awayHouses === 1 ? t('house') : t('houses')) + '</div>';
-    html += '</div><div class="bottom"><div class="in"><a class="bigbtn green" target="_blank" rel="noopener" href="' + esc(waLink('', S.vendor.name + ' · ' + dayLabel(day) + '\n' + s.items.map((x) => x.p.name + ': ' + fq(x.qty) + ' ' + x.p.unit).join('\n'))) + '">' + ic('chat') + esc(t('sendDairy')) + '</a></div></div>';
+    if (!s.items.length) html += '<div class="card empty">0</div>';
+    if (s.extra) html += '<div class="noteline"><span class="d s-extra">+</span>' + fq(s.extra) + ' ' + esc(t('extraAsked')) + ' · ' + s.extraHouses + ' ' + esc(s.extraHouses === 1 ? t('house') : t('houses')) + '</div>';
+    if (s.away) html += '<div class="noteline"><span class="d s-away">॥</span>' + fq(s.away) + ' ' + esc(t('lessAway')) + ' · ' + s.awayHouses + ' ' + esc(s.awayHouses === 1 ? t('house') : t('houses')) + '</div>';
+    html += '<div class="stack"><a class="btn green block" target="_blank" rel="noopener" href="' + esc(waLink('', S.vendor.name + ' · ' + dayLabel(day) + '\n' + s.items.map((x) => x.p.name + ': ' + fq(x.qty) + ' ' + x.p.unit).join('\n'))) + '">' + ic('chat') + esc(t('sendDairy')) + '</a></div>';
     return html;
   }
 
   function viewSettings() {
     const v = S.vendor;
-    return '<div class="phead"><div class="row"><a class="iconbtn ghost" href="#/home" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a><div class="col grow"><h1>' + esc(t('settings')) + '</h1></div></div></div><div class="form">' +
-      '<div class="field"><label for="s-name">' + esc(t('vendorName')) + '</label><input id="s-name" value="' + esc(v.name) + '"></div>' +
-      '<div class="field"><label for="s-phone">' + esc(t('yourPhone')) + '</label><input id="s-phone" type="tel" inputmode="tel" value="' + esc(v.phone) + '"></div>' +
-      '<div class="field"><label for="s-upi">' + esc(t('upiId')) + '</label><input id="s-upi" value="' + esc(v.upi) + '" autocapitalize="off"></div>' +
-      '<div class="field"><label for="s-limit">' + esc(t('limit')) + '</label><input id="s-limit" type="number" inputmode="numeric" value="' + esc(v.limit) + '"></div>' +
-      '<div class="field"><span class="lab">' + esc(t('language')) + '</span><div class="opts"><button type="button" class="opt' + (v.lang === 'en' ? ' on' : '') + '" data-act="setlang" data-val="en">English</button><button type="button" class="opt' + (v.lang === 'hi' ? ' on' : '') + '" data-act="setlang" data-val="hi">हिंदी</button></div></div>' +
-      '<div class="field"><span class="lab">' + esc(t('items')) + '</span>' +
-      S.products.map((p) => '<div class="row" style="gap:8px"><input class="grow" style="min-height:52px;border-radius:14px;border:2px solid var(--line);padding:0 12px;font-size:17px" data-prod="' + p.id + '" data-k="name" value="' + esc(p.name) + '" aria-label="' + esc(t('product')) + '">' +
-        '<input style="width:70px;min-height:52px;border-radius:14px;border:2px solid var(--line);padding:0 10px;font-size:17px" data-prod="' + p.id + '" data-k="unit" value="' + esc(p.unit) + '" aria-label="' + esc(t('unit')) + '">' +
-        '<input style="width:84px;min-height:52px;border-radius:14px;border:2px solid var(--line);padding:0 10px;font-size:17px" type="number" inputmode="decimal" data-prod="' + p.id + '" data-k="rate" value="' + esc(p.rate) + '" aria-label="' + esc(t('rate')) + '"></div>').join('') +
-      '<button type="button" class="opt" data-act="addprod">+ ' + esc(t('addItem')) + '</button></div>' +
-      '<div class="btnrow"><button class="bigbtn" data-act="savesettings">' + ic('check') + esc(t('save')) + '</button></div>' +
-      '<div class="btnrow"><button class="bigbtn line" data-act="backup">' + esc(t('backup')) + '</button></div>' +
-      '<div class="btnrow"><label class="bigbtn line" style="cursor:pointer">' + esc(t('restore')) + '<input type="file" accept="application/json" id="restore" hidden></label></div>' +
-      '<div class="btnrow"><button class="bigbtn line" data-act="sample">' + esc(t('sample')) + '</button></div>' +
-      '<div class="btnrow"><button class="bigbtn red" data-act="reset">' + esc(t('resetAll')) + '</button></div></div>';
+    const fld = (icon, fid, lab, val, attrs) => '<div class="field"><label for="' + fid + '">' + esc(lab) + '</label><div class="inp">' + ic(icon, 'sm') + '<input id="' + fid + '" value="' + esc(val) + '" ' + (attrs || '') + '></div></div>';
+    return pageHead(t('settings'), other('settings'), '#/home') +
+      '<div class="card">' + fld('user', 's-name', t('vendorName'), v.name) + fld('phone', 's-phone', t('yourPhone'), v.phone, 'type="tel" inputmode="tel"') +
+      fld('qr', 's-upi', t('upiId'), v.upi, 'autocapitalize="off"') + fld('alert', 's-limit', t('limit'), v.limit, 'type="number" inputmode="numeric"') +
+      '<div class="field"><span class="lab">' + esc(t('language')) + '</span><div class="seg"><button type="button" class="' + (v.lang === 'en' ? 'on' : '') + '" data-act="setlang" data-val="en">English</button><button type="button" class="' + (v.lang === 'hi' ? 'on' : '') + '" data-act="setlang" data-val="hi">हिंदी</button></div></div></div>' +
+      '<div class="card"><div class="ctitle">' + ic('can') + '<h2 class="grow">' + esc(t('items')) + '</h2><button class="iconbtn round" data-act="addprod" aria-label="' + esc(t('addItem')) + '">' + ic('plus') + '</button></div>' +
+      S.products.map((p) => '<div class="prodedit"><input data-prod="' + p.id + '" data-k="name" value="' + esc(p.name) + '" aria-label="' + esc(t('product')) + '">' +
+        '<input data-prod="' + p.id + '" data-k="unit" value="' + esc(p.unit) + '" aria-label="' + esc(t('unit')) + '">' +
+        '<input type="number" inputmode="decimal" data-prod="' + p.id + '" data-k="rate" value="' + esc(p.rate) + '" aria-label="' + esc(t('rate')) + '"></div>').join('') + '</div>' +
+      '<div class="stack"><button class="btn big block" data-act="savesettings">' + ic('check') + esc(t('save')) + '</button>' +
+      '<button class="btn line block" data-act="backup">' + esc(t('backup')) + '</button>' +
+      '<label class="btn line block">' + esc(t('restore')) + '<input type="file" accept="application/json" id="restore" hidden></label>' +
+      '<button class="btn line block" data-act="sample">' + esc(t('sample')) + '</button>' +
+      '<button class="btn red block" data-act="reset">' + esc(t('resetAll')) + '</button></div>';
   }
 
   // Customer-facing page: everything it needs travels inside the link, so it opens without an account or server.
@@ -478,85 +685,95 @@
     const upi = d.u ? 'upi://pay?pa=' + encodeURIComponent(d.u) + '&pn=' + encodeURIComponent(d.v) + '&am=' + Math.max(0, Math.round(d.due)) + '&cu=INR&tn=' + encodeURIComponent(d.n + ' ' + monthLabel(ym)) : '';
     const ask = (txt) => 'https://wa.me/' + waPhone(d.vp) + '?text=' + encodeURIComponent(txt);
     document.title = d.v + ' · ' + d.n;
-    return '<div class="pub"><div class="minihero"><div class="sun"></div><img src="' + heroImg + '" alt=""><span class="pill" style="align-self:flex-start;background:#fff">' + ic('link', 'sm') + esc(d.v) + '</span>' +
-      '<h1 style="margin-top:8px">' + esc(d.n) + '</h1><span class="muted" style="font-weight:600">' + esc([d.f, d.p].filter(Boolean).join(' · ')) + '</span></div>' +
-      '<div class="monthnav" style="justify-content:center"><div class="t"><b>' + esc(monthLabel(ym)) + '</b></div></div>' +
-      calendarHtml(cells, false) + legendHtml(counts) +
-      '<div class="card"><div class="kv"><span>' + fq(d.q) + ' ' + esc(d.un) + ' × ₹' + fq(d.r) + '</span><span>' + rupees(d.a) + '</span></div>' +
-      '<div class="kv"><span>' + esc(t('oldDueShort')) + '</span><span>' + rupees(d.o) + '</span></div>' +
-      '<div class="kv"><span>' + esc(t('paid')) + '</span><span style="color:var(--given)">− ' + rupees(d.pd) + '</span></div>' +
-      '<div class="total"><b>' + esc(t('toPay')) + '</b><strong>' + rupees(Math.max(0, d.due)) + '</strong></div></div>' +
-      (upi && d.due > 0 ? '<div class="navrow"><a class="bigbtn" href="' + esc(upi) + '">' + ic('qr') + esc(t('payUpi')) + ' ' + rupees(d.due) + '</a></div>' : '') +
-      (d.vp ? '<div class="navrow"><a class="bigbtn line" href="' + esc(ask('Please pause delivery for ' + d.n + ' (' + (d.f || '') + ') from __ to __')) + '">' + ic('pause') + esc(t('askPause')) + '</a>' +
-        '<a class="bigbtn line" href="' + esc(ask('Please send extra for ' + d.n + ' (' + (d.f || '') + '): ')) + '">' + ic('plus') + esc(t('askExtra')) + '</a></div>' : '') +
-      '<p class="muted" style="text-align:center;font-size:14px;margin:18px 0 0">LocalWaallah · ' + esc(t('noApp')) + '</p></div>';
+    const rows = d.l || [[d.p, d.un, d.q, d.r, d.a]];
+    return '<div class="pub"><header class="apphead"><span class="logo">' + ic('can') + '</span><div class="t"><b>' + esc(d.v) + '</b><span>LocalWaallah · ' + esc(t('noApp')) + '</span></div>' + langBtn() + '</header>' +
+      '<div class="card"><div class="profile"><span class="av big">' + esc(initials(d.n)) + '</span><div class="grow"><h2>' + esc(d.n) + '</h2><div class="sub">' + esc([d.f, rows.map((x) => x[0]).join(', ')].filter(Boolean).join(' · ')) + '</div></div></div></div>' +
+      '<div class="hero"><div class="lab">' + esc(t('toPay')) + ' · ' + esc(monthLabel(ym)) + '</div><div class="big">' + rupees(Math.max(0, d.due)) + '</div>' +
+      '<div class="brk">' + rows.map((x) => '<div><span>' + esc((rows.length > 1 ? x[0] + ' · ' : '') + fq(x[2]) + ' ' + x[1] + ' × ₹' + fq(x[3])) + '</span><b>' + rupees(x[4]) + '</b></div>').join('') + '<div><span>' + esc(t('oldDueShort')) + '</span><b>' + rupees(d.o) + '</b></div><div><span>' + esc(t('paid')) + '</span><b>− ' + rupees(d.pd) + '</b></div></div>' +
+      (upi && d.due > 0 ? '<div class="stack"><a class="btn white" href="' + esc(upi) + '">' + ic('qr') + esc(t('payUpi')) + ' ' + rupees(d.due) + '</a></div>' : '') + '</div>' +
+      '<div class="card"><div class="monthnav"><div class="t"><b>' + esc(monthLabel(ym)) + '</b></div></div>' + calendarHtml(cells, false) + legendHtml(counts) + '</div>' +
+      (d.vp ? '<div class="btns"><a class="btn line" href="' + esc(ask('Please pause delivery for ' + d.n + ' (' + (d.f || '') + ') from __ to __')) + '">' + ic('pause', 'sm') + esc(t('askPause')) + '</a>' +
+        '<a class="btn line" href="' + esc(ask('Please send extra for ' + d.n + ' (' + (d.f || '') + '): ')) + '">' + ic('plus', 'sm') + esc(t('askExtra')) + '</a></div>' : '') + '</div>';
   }
 
-  const viewNotFound = () => '<div class="empty" style="padding-top:80px">Not found.<div class="btnrow"><a class="bigbtn" href="#/home">' + esc(t('back')) + '</a></div></div>';
+  const viewNotFound = () => '<div class="empty" style="padding-top:80px">Not found.<div class="stack"><a class="btn block" href="#/home">' + esc(t('back')) + '</a></div></div>';
 
   // ---------- links & sharing ----------
   function publicLink(c, ym) {
-    const p = prod(c.productId);
     const b = monthBill(c, ym);
     const { codes } = monthCells(c, ym);
-    const data = { v: S.vendor.name, vp: S.vendor.phone, u: S.vendor.upi, n: c.name, f: c.flat, p: p.name, un: p.unit, r: rateOf(c), m: ym, d: codes, o: Math.round(b.old), a: Math.round(b.amount), pd: Math.round(b.paid), due: Math.round(b.due), q: b.qty };
+    const data = { v: S.vendor.name, vp: S.vendor.phone, u: S.vendor.upi, n: c.name, f: c.flat, m: ym, d: codes, o: Math.round(b.old), a: Math.round(b.amount), pd: Math.round(b.paid), due: Math.round(b.due),
+      l: b.lines.map((x) => [x.p.name, x.p.unit, +fq(x.qty), x.rate, Math.round(x.amount)]) };
     const enc = btoa(unescape(encodeURIComponent(JSON.stringify(data)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     return location.origin + location.pathname + '#/s/' + enc;
   }
   function billText(c, ym) {
-    const p = prod(c.productId);
     const b = monthBill(c, ym);
-    const lines = [
+    const out = [
       'Namaste ' + c.name + ',',
       S.vendor.name + ' · ' + monthLabel(ym),
-      fq(b.qty) + ' ' + p.unit + ' × ₹' + fq(rateOf(c)) + ' = ' + rupees(b.amount),
+      ...b.lines.map((x) => x.p.name + ': ' + fq(x.qty) + ' ' + x.p.unit + ' × ₹' + fq(x.rate) + ' = ' + rupees(x.amount)),
       t('oldDueShort') + ': ' + rupees(b.old),
       t('paid') + ': ' + rupees(b.paid),
       t('toPay') + ': *' + rupees(Math.max(0, b.due)) + '*'
     ];
-    if (S.vendor.upi) lines.push('UPI: ' + S.vendor.upi);
-    lines.push('', publicLink(c, ym));
-    return lines.join('\n');
+    if (S.vendor.upi) out.push('UPI: ' + S.vendor.upi);
+    out.push('', publicLink(c, ym));
+    return out.join('\n');
   }
   const waLink = (phone, text) => 'https://wa.me/' + (phone ? waPhone(phone) : '') + '?text=' + encodeURIComponent(text);
 
   // ---------- sheets ----------
   function sheet(html) { $('#sheet-root').innerHTML = '<div class="scrim" data-act="closesheet"><div class="sheet" role="dialog" aria-modal="true">' + html + '</div></div>'; }
   const closeSheet = () => { $('#sheet-root').innerHTML = ''; };
+  const sheetHead = (title) => '<div class="row" style="margin-bottom:8px"><h2 class="grow">' + esc(title) + '</h2><button class="iconbtn" data-act="closesheet" aria-label="' + esc(t('cancel')) + '">' + ic('close') + '</button></div>';
   // In-app confirm: browser confirm() boxes are blocked in some app views and scary for new users.
   function askThen(msg, fn) {
     ui.pending = fn;
-    sheet('<h2>' + esc(msg) + '</h2><div class="btnrow"><button class="bigbtn line" data-act="closesheet">' + esc(t('cancel')) + '</button><button class="bigbtn" style="background:var(--skip)" data-act="yes">' + ic('check') + esc(t('yesDo')) + '</button></div>');
+    sheet('<h2>' + esc(msg) + '</h2><div class="btns" style="margin-top:18px"><button class="btn soft" data-act="closesheet">' + esc(t('cancel')) + '</button><button class="btn" data-act="yes">' + ic('check') + esc(t('yesDo')) + '</button></div>');
   }
   function linkSheet(link) {
-    sheet('<div class="row"><h2 class="grow">' + esc(t('custLink')) + '</h2><button class="iconbtn" data-act="closesheet" aria-label="' + esc(t('cancel')) + '">' + ic('close') + '</button></div>' +
-      '<div class="field"><textarea id="linkbox" readonly rows="4" style="width:100%;border-radius:14px;border:2px solid var(--line);padding:10px;font-size:14px;background:var(--surface)">' + esc(link) + '</textarea></div>' +
-      '<div class="btnrow"><button class="bigbtn" data-act="copytext">' + ic('link') + esc(t('copy')) + '</button><a class="bigbtn line" target="_blank" rel="noopener" href="' + esc(link) + '">' + esc(t('open')) + '</a></div>');
+    sheet(sheetHead(t('custLink')) + '<textarea id="linkbox" readonly rows="4">' + esc(link) + '</textarea>' +
+      '<div class="btns"><button class="btn" data-act="copytext">' + ic('link') + esc(t('copy')) + '</button><a class="btn line" target="_blank" rel="noopener" href="' + esc(link) + '">' + esc(t('open')) + '</a></div>');
   }
-
   function paySheet(cid) {
     const c = cust(cid);
     const b = Math.max(0, Math.round(balance(c, todayStr())));
     ui.pay = { cid, amt: '', mode: 'cash', due: b };
-    sheet('<div class="row"><h2 class="grow">' + esc(c.name) + '</h2><button class="iconbtn" data-act="closesheet" aria-label="' + esc(t('cancel')) + '">' + ic('close') + '</button></div>' +
-      '<div class="muted" style="font-weight:600">' + esc(t('due')) + ': ' + rupees(b) + '</div>' +
+    sheet(sheetHead(c.name) + '<div class="muted" style="font-weight:600">' + esc(t('due')) + ': ' + rupees(b) + '</div>' +
       '<div class="amountshow" id="amt">₹0</div>' +
-      '<div class="opts" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-top:8px">' + ['cash', 'upi', 'cheque', 'bank'].map((m) => '<button type="button" class="opt' + (m === 'cash' ? ' on' : '') + '" data-act="paymode" data-val="' + m + '">' + esc(t(m)) + '</button>').join('') + '</div>' +
+      '<div class="seg">' + ['cash', 'upi', 'cheque', 'bank'].map((m) => '<button type="button" class="' + (m === 'cash' ? 'on' : '') + '" data-act="paymode" data-val="' + m + '">' + esc(t(m)) + '</button>').join('') + '</div>' +
       '<div class="keypad">' + ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'full', '0', 'del'].map((k) =>
         '<button type="button" data-act="key" data-val="' + k + '"' + (k === 'del' ? ' aria-label="Delete"' : '') + '>' + (k === 'del' ? '⌫' : k === 'full' ? '<span style="font-size:16px">' + rupees(b) + '</span>' : k) + '</button>').join('') + '</div>' +
-      '<div class="btnrow"><button class="bigbtn green" data-act="savepay">' + ic('check') + esc(t('received')) + '</button></div>');
+      '<div class="stack"><button class="btn green big block" data-act="savepay">' + ic('check') + esc(t('received')) + '</button></div>');
+  }
+  function payPickSheet() {
+    const today = todayStr();
+    const list = sortRoute(active()).map((c) => ({ c, b: balance(c, today) })).sort((a, z) => z.b - a.b);
+    sheet(sheetHead(t('pickCustomer')) + list.map(({ c, b }) => '<button class="pick" data-act="pay" data-id="' + c.id + '"><span class="flat">' + esc(c.flat || initials(c.name)) + '</span><b class="grow">' + esc(c.name) + '</b><span class="amt' + (b > 0.5 ? ' red' : '') + '">' + (b > 0.5 ? rupees(b) : '') + '</span></button>').join(''));
+  }
+  function dueSheet() {
+    const today = todayStr();
+    const rows = active().map((c) => ({ c, b: balance(c, today) })).filter((x) => x.b > 0.5).sort((a, z) => z.b - a.b);
+    sheet(sheetHead(t('sendDues')) + (rows.length ? rows.map(({ c, b }) => '<a class="pick" target="_blank" rel="noopener" href="' + esc(waLink(c.phone, billText(c, monthOf(today)))) + '"><span class="av">' + esc(initials(c.name)) + '</span><b class="grow">' + esc(c.name) + '<br><span class="amt red">' + rupees(b) + '</span></b><span class="ping">' + ic('chat', 'sm') + esc(t('ping')) + '</span></a>').join('') : '<div class="empty">' + esc(t('nobodyOwes')) + '</div>'));
+  }
+  function rateSheet(pid) {
+    const p = S.products.find((x) => x.id === pid);
+    if (!p) return;
+    sheet(sheetHead(t('editRate')) + '<div class="field"><label for="r-name">' + esc(t('product')) + '</label><div class="inp"><input id="r-name" value="' + esc(p.name) + '"></div></div>' +
+      '<div class="row" style="gap:10px"><div class="field grow"><label for="r-rate">' + esc(t('rate')) + '</label><div class="inp">' + ic('rupee', 'sm') + '<input id="r-rate" type="number" inputmode="decimal" value="' + esc(p.rate) + '"></div></div>' +
+      '<div class="field" style="width:110px"><label for="r-unit">' + esc(t('unit')) + '</label><div class="inp"><input id="r-unit" value="' + esc(p.unit) + '"></div></div></div>' +
+      '<div class="stack"><button class="btn big block" data-act="saverate" data-id="' + p.id + '">' + ic('check') + esc(t('save')) + '</button></div>');
   }
   function pauseSheet(cid) {
     const c = cust(cid);
     const tm = addDays(todayStr(), 1);
-    sheet('<div class="row"><h2 class="grow">' + esc(t('pauseDates')) + '</h2><button class="iconbtn" data-act="closesheet" aria-label="' + esc(t('cancel')) + '">' + ic('close') + '</button></div>' +
-      '<div class="muted" style="font-weight:600">' + esc(c.name) + '</div>' +
-      '<div class="row" style="gap:10px"><div class="field grow"><label for="p-from">' + esc(t('from')) + '</label><input type="date" id="p-from" value="' + tm + '"></div>' +
-      '<div class="field grow"><label for="p-to">' + esc(t('to')) + '</label><input type="date" id="p-to" value="' + addDays(tm, 4) + '"></div></div>' +
-      '<div class="btnrow"><button class="bigbtn" data-act="savepause" data-id="' + c.id + '">' + ic('pause') + esc(t('pause')) + '</button></div>' +
-      (c.pauses || []).filter((p) => p.to >= todayStr()).map((p, i) => '<div class="card" style="margin:12px 0 0;display:flex;align-items:center;gap:10px"><span class="grow" style="font-weight:700">' +
-        esc(parse(p.from).toLocaleDateString(locale(), { day: 'numeric', month: 'short' })) + ' – ' + esc(parse(p.to).toLocaleDateString(locale(), { day: 'numeric', month: 'short' })) +
-        '</span><button class="opt" data-act="delpause" data-id="' + c.id + '" data-from="' + p.from + '">' + esc(t('resume')) + '</button></div>').join(''));
+    sheet(sheetHead(t('pauseDates')) + '<div class="muted" style="font-weight:600">' + esc(c.name) + '</div>' +
+      '<div class="row" style="gap:10px;margin-top:6px"><div class="field grow"><label for="p-from">' + esc(t('from')) + '</label><div class="inp"><input type="date" id="p-from" value="' + tm + '"></div></div>' +
+      '<div class="field grow"><label for="p-to">' + esc(t('to')) + '</label><div class="inp"><input type="date" id="p-to" value="' + addDays(tm, 4) + '"></div></div></div>' +
+      '<div class="stack"><button class="btn big block" data-act="savepause" data-id="' + c.id + '">' + ic('pause') + esc(t('pause')) + '</button></div>' +
+      (c.pauses || []).filter((p) => p.to >= todayStr()).map((p) => '<div class="card row" style="margin:12px 0 0"><span class="grow" style="font-weight:700">' +
+        esc(dshort(p.from)) + ' – ' + esc(dshort(p.to)) + '</span><button class="btn soft" style="min-height:44px" data-act="delpause" data-id="' + c.id + '" data-from="' + p.from + '">' + esc(t('resume')) + '</button></div>').join(''));
   }
 
   // ---------- voice ----------
@@ -578,7 +795,8 @@
   }
   // "skip 302", "302 nahi", "2 extra 302", "302 aadha", "flat 302 do litre zyada"
   function applyVoice(text) {
-    const day = location.hash.startsWith('#/today') ? ui.day : todayStr();
+    const r = location.hash.split('/')[1] || '';
+    const day = r === '' || r === 'home' || r === 'today' ? ui.day : todayStr();
     const raw = text.replace(/[०-९]/g, (d) => String('०१२३४५६७८९'.indexOf(d))).toLowerCase();
     const numWords = { one: 1, two: 2, three: 3, four: 4, five: 5, ek: 1, do: 2, teen: 3, char: 4, paanch: 5, 'एक': 1, 'दो': 2, 'तीन': 3, 'चार': 4, 'पांच': 5, 'पाँच': 5 };
     const tokens = raw.split(/[\s,.]+/).filter(Boolean);
@@ -589,18 +807,20 @@
     if (/skip|nahi|nahin|नहीं|नही|मत|band|बंद|no /.test(raw + ' ')) st = 'skip';
     else if (/half|aadha|adha|आधा/.test(raw)) st = 'half';
     else if (/extra|zyada|jyada|ज़्यादा|ज्यादा|और|aur|more|add/.test(raw)) st = 'extra';
+    const it = lines(c).find((y) => raw.includes(prod(y.productId).name.toLowerCase().split(' ')[0])) || lines(c).find((y) => lineInfo(c, y, day).st !== 'none') || lines(c)[0];
+    const key = lkey(c, it);
     let x = 1;
     for (const tk of tokens) {
       if (tk === String(c.flat).toLowerCase()) continue;
       if (/^\d+(\.\d+)?$/.test(tk)) { x = +tk; break; }
       if (numWords[tk]) { x = numWords[tk]; break; }
     }
-    const prev = (S.marks[day] || {})[c.id];
-    if ((c.sched || {}).type === 'demand') setMark(c.id, day, st === 'skip' ? null : { s: 'extra', x });
-    else setMark(c.id, day, st === 'done' ? null : st === 'extra' ? { s: 'extra', x } : { s: st });
+    const prev = (S.marks[day] || {})[key];
+    if ((it.sched || {}).type === 'demand') setMark(key, day, st === 'skip' ? null : { s: 'extra', x });
+    else setMark(key, day, st === 'extra' ? { s: 'extra', x } : { s: st });
     save(); render();
-    const i = dayInfo(c, day);
-    toast(t('heard') + ': ' + (c.flat || '') + ' ' + c.name + ' → ' + t(LOOK[i.st].w) + (i.st === 'extra' ? ' +' + fq(x) : ''), () => { setMark(c.id, day, prev || null); save(); render(); });
+    const i = lineInfo(c, it, day);
+    toast(t('heard') + ': ' + (c.flat || '') + ' ' + c.name + ' · ' + prod(it.productId).name + ' → ' + t(LOOK[i.st].w) + (i.st === 'extra' ? ' +' + fq(x) : ''), () => { setMark(key, day, prev || null); save(); render(); });
     return true;
   }
 
@@ -609,9 +829,10 @@
     const today = todayStr();
     const start = monthStart(shiftMonth(monthOf(today), -2));
     const fc = { id: uid(), name: 'Full Cream', unit: 'L', rate: 68 }, tn = { id: uid(), name: 'Toned', unit: 'L', rate: 56 };
+    const pn = { id: uid(), name: 'Paneer', unit: 'kg', rate: 340 }, dh = { id: uid(), name: 'Curd', unit: 'pouch', rate: 40 };
     S = blank();
-    Object.assign(S.vendor, { name: 'Ramesh Dairy', phone: '', upi: 'rameshdairy@upi', lang: S.vendor.lang || 'en', type: 'milk' });
-    S.products = [fc, tn];
+    Object.assign(S.vendor, { name: 'Ramesh Dairy', phone: '', upi: 'rameshdairy@upi', lang: S.vendor.lang || 'en', type: 'milk', limit: 5000 });
+    S.products = [fc, tn, pn, dh];
     const people = [
       ['301', 'Sharma ji', 'Tower B', fc, 1, 'daily'], ['302', 'Mehta family', 'Tower B', tn, 2, 'daily'], ['303', 'Iqbal bhai', 'Tower B', fc, 1, 'daily'],
       ['304', 'Rao madam', 'Tower B', tn, 1, 'alt'], ['305', 'Fernandes', 'Tower B', fc, 1, 'daily'], ['306', 'Gupta ji', 'Tower B', fc, 1, 'daily'],
@@ -621,9 +842,13 @@
     let seed = 7;
     const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
     people.forEach(([flat, name, sector, p, qty, type]) => {
-      const c = { id: uid(), flat, name, sector, phone: '', productId: p.id, qty, sched: { type, days: [1, 3, 5] }, rate: '', opening: rnd() < 0.3 ? 200 : 0, start, pauses: [] };
+      const id = uid();
+      const c = { id, flat, name, sector, phone: '', items: [{ id, productId: p.id, qty, sched: { type, days: [1, 3, 5] }, rate: '' }], opening: rnd() < 0.3 ? 200 : 0, start, pauses: [] };
       S.customers.push(c);
     });
+    S.customers[1].items.push({ id: uid(), productId: pn.id, qty: 0.5, sched: { type: 'days', days: [0, 6] }, rate: '' });
+    S.customers[1].items.push({ id: uid(), productId: dh.id, qty: 1, sched: { type: 'demand', days: [] }, rate: '' });
+    S.customers[11].items.push({ id: uid(), productId: pn.id, qty: 2, sched: { type: 'daily', days: [] }, rate: '' });
     S.customers[5].pauses.push({ from: addDays(today, -1), to: addDays(today, 5) });
     S.customers[1].pauses.push({ from: addDays(today, -40), to: addDays(today, -35) });
     for (let d = start; d <= today; d = addDays(d, 1)) {
@@ -657,94 +882,166 @@
     const H = handlers[act];
     if (H) { e.preventDefault(); H(el, id); }
   });
+  const onlyOn = (el) => el.parentNode.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el));
+  function markToast(c, it, day, prev) {
+    const i = lineInfo(c, it, day);
+    const p = prod(it.productId);
+    const what = i.demand ? fq(i.qty) + ' ' + p.unit : t(LOOK[i.st].w) + (i.st === 'none' ? '' : ' · ' + fq(i.qty) + ' ' + p.unit);
+    toast((c.flat ? c.flat + ' ' : '') + c.name + ': ' + what, () => { setMark(lkey(c, it), day, prev || null); save(); render(); });
+  }
+  // Redraws the edit form after a tap, keeping what was typed.
+  function formTap(fn) { snapForm(); fn(ui.form); render(); }
+  const formIdx = (el) => ui.form.items[+el.dataset.i];
+  function daySheet(c, day) {
+    ui.sheetDay = { cid: c.id, day };
+    const opts = [['done', 'given'], ['half', 'half'], ['skip', 'skip'], ['extra', 'extra']];
+    sheet(sheetHead(parse(day).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })) + '<div class="muted" style="font-weight:600">' + esc(c.name) + '</div>' +
+      lines(c).map((it) => {
+        const i = lineInfo(c, it, day); const p = prod(it.productId);
+        const d = ' data-id="' + c.id + '" data-line="' + it.id + '"';
+        const pick = i.demand
+          ? '<div class="seg"><button type="button" data-act="setline" data-s="minus"' + d + '>−</button><button type="button" class="on">' + fq(i.qty) + ' ' + esc(p.unit) + '</button><button type="button" data-act="setline" data-s="plus"' + d + '>+</button></div>'
+          : '<div class="seg">' + opts.map(([k, w]) => '<button type="button" class="' + (i.st === k ? 'on' : '') + '" data-act="setline" data-s="' + k + '"' + d + '>' + esc(t(w)) + '</button>').join('') + '</div>';
+        return '<div class="card soft"><div class="row" style="margin-bottom:8px"><b class="grow">' + esc(lineText(it)) + '</b><span class="muted" style="font-weight:700">' + fq(i.qty) + ' ' + esc(p.unit) + '</span></div>' + pick + '</div>';
+      }).join(''));
+  }
   const handlers = {
     undo() { const u = toast.undo; $('#toast').hidden = true; if (u) u(); },
     lang() { S.vendor.lang = S.vendor.lang === 'hi' ? 'en' : 'hi'; save(); render(); },
     setlang(el) { S.vendor.lang = el.dataset.val; save(); render(); },
-    pick(el) { el.parentNode.querySelectorAll('.opt').forEach((b) => b.classList.toggle('on', b === el)); },
+    pick(el) { onlyOn(el); },
     start() {
       const name = $('#w-name').value.trim();
       if (!name) { $('#w-name').focus(); return; }
-      const type = ($('#w-type .opt.on') || {}).dataset.val || 'milk';
+      const type = ($('#w-type .on') || {}).dataset.val || 'milk';
       S.vendor.name = name; S.vendor.type = type;
       S.products = (PRESETS[type] || PRESETS.milk).products.map((p) => ({ id: uid(), ...p }));
-      save(); location.hash = '#/home';
+      save(); location.hash = '#/home'; render();
     },
     sample() { const go = () => { loadSample(); location.hash = '#/home'; render(); }; if (S.customers.length) askThen(t('resetAsk'), go); else go(); },
     reset() { askThen(t('resetAsk'), () => { const lang = S.vendor.lang; S = blank(); S.vendor.lang = lang; save(); location.hash = '#/home'; render(); }); },
     yes() { const fn = ui.pending; ui.pending = null; closeSheet(); if (fn) fn(); },
-    day(el) { ui.day = addDays(ui.day, +el.dataset.n); render(); },
-    sector(el) { ui.sector = el.dataset.val; render(); },
-    cycle(el, id) {
+    day(el) { ui.day = addDays(ui.day, +el.dataset.n); ui.edit = null; render(); },
+    sector() {
+      const sectors = [...new Set(sortRoute(active()).map((c) => c.sector || '').filter(Boolean))];
+      const all = [''].concat(sectors);
+      ui.sector = all[(all.indexOf(ui.sector) + 1) % all.length];
+      render();
+    },
+    filter(el) { ui.filter = el.dataset.val; render(); },
+    mark(el, id) {
+      const c = cust(id); const it = lineOf(c, el.dataset.line); const key = lkey(c, it); const day = ui.day; const s = el.dataset.s;
+      const prev = (S.marks[day] || {})[key];
+      if (s === 'extra') {
+        const step = stepOf(prod(it.productId).unit);
+        setMark(key, day, { s: 'extra', x: prev && prev.s === 'extra' ? +prev.x + step : step });
+        ui.edit = key;
+      } else { setMark(key, day, { s }); ui.edit = null; }
+      save(); render(); markToast(c, it, day, prev);
+    },
+    give(el, id) {
+      const c = cust(id); const it = lineOf(c, el.dataset.line); const key = lkey(c, it); const day = ui.day; const prev = (S.marks[day] || {})[key];
+      setMark(key, day, { s: 'extra', x: ((prev && +prev.x) || 0) + 1 });
+      save(); render(); markToast(c, it, day, prev);
+    },
+    clear(el, id) {
+      const c = cust(id); const it = lineOf(c, el.dataset.line); const key = lkey(c, it); const day = ui.day; const prev = (S.marks[day] || {})[key];
+      setMark(key, day, null); save(); render(); markToast(c, it, day, prev);
+    },
+    change(el, id) { const key = lkey(cust(id), lineOf(cust(id), el.dataset.line)); ui.edit = ui.edit === key ? null : key; render(); },
+    resume(el, id) {
       const c = cust(id); const day = ui.day;
-      const prev = (S.marks[day] || {})[id];
-      if ((c.sched || {}).type === 'demand') {
-        const x = ((prev && prev.x) || 0) + 1;
-        setMark(id, day, x > 9 ? null : { s: 'extra', x });
-      } else {
-        const cur = dayInfo(c, day).st;
-        const nx = NEXT[cur] || 'done';
-        setMark(id, day, nx === 'done' ? null : nx === 'extra' ? { s: 'extra', x: 1 } : { s: nx });
-      }
+      const before = JSON.parse(JSON.stringify(c.pauses || []));
+      c.pauses = (c.pauses || []).map((p) => (p.from <= day && day <= p.to ? (p.from >= day ? null : { from: p.from, to: addDays(day, -1) }) : p)).filter(Boolean);
       save(); render();
-      const i = dayInfo(c, day);
-      toast((c.flat ? c.flat + ' ' : '') + c.name + ': ' + (i.demand ? fq(i.qty) + ' ' + prod(c.productId).unit : t(LOOK[i.st].w)), () => { setMark(id, day, prev || null); save(); render(); });
+      toast(c.name + ': ' + t('resumeToday'), () => { c.pauses = before; save(); render(); });
+    },
+    endrun() {
+      const day = ui.day;
+      const list = active().filter((c) => !ui.sector || c.sector === ui.sector).map((c) => ({ c, h: houseState(c, day) })).filter((x) => x.h.pending);
+      if (!list.length) return;
+      askThen(fill('endRunAsk', { n: list.length }), () => {
+        const before = JSON.parse(JSON.stringify(S.marks[day] || {}));
+        list.forEach(({ c, h }) => h.ls.forEach((x) => { if (x.i.pending) setMark(lkey(c, x.it), day, { s: 'done' }); }));
+        save(); render();
+        toast(t('allDone'), () => { S.marks[day] = before; if (!Object.keys(before).length) delete S.marks[day]; save(); render(); });
+      });
     },
     cycleday(el) {
       const c = cust(ui.cid); const day = el.dataset.day;
-      const prev = (S.marks[day] || {})[c.id];
       const cur = dayInfo(c, day);
-      if (cur.st === 'away') { toast(t('away') + ' ' + t('till') + ' ' + cur.till); return; }
-      if (cur.demand) { const x = ((prev && prev.x) || 0) + 1; setMark(c.id, day, x > 9 ? null : { s: 'extra', x }); }
-      else if (cur.st === 'none') setMark(c.id, day, { s: 'extra', x: 1 });
-      else { const nx = NEXT[cur.st]; setMark(c.id, day, nx === 'done' ? null : nx === 'extra' ? { s: 'extra', x: 1 } : { s: nx }); }
+      if (cur.st === 'away') { toast(fill('pausedUntil', { d: dshort(cur.till) })); return; }
+      if (lines(c).length > 1) { daySheet(c, day); return; }
+      const key = c.id; const prev = (S.marks[day] || {})[key];
+      if (cur.demand) { const x = ((prev && prev.x) || 0) + 1; setMark(key, day, x > 9 ? null : { s: 'extra', x }); }
+      else if (cur.st === 'none') setMark(key, day, prev ? null : { s: 'extra', x: 1 });
+      else { const nx = NEXT[cur.st]; setMark(key, day, nx === 'extra' ? { s: 'extra', x: 1 } : { s: nx }); }
       save(); render();
-      toast(parse(day).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }) + ': ' + t(LOOK[dayInfo(c, day).st].w), () => { setMark(c.id, day, prev || null); save(); render(); });
+      toast(dshort(day) + ': ' + t(LOOK[dayInfo(c, day).st].w), () => { setMark(key, day, prev || null); save(); render(); });
     },
-    awayinfo(el, id) { const c = cust(id); const p = pauseOn(c, ui.day); toast(c.name + ': ' + t('away') + ' ' + t('till') + ' ' + parse(p.to).toLocaleDateString(locale(), { day: 'numeric', month: 'short' })); },
+    setline(el, id) {
+      const c = cust(id); const it = lineOf(c, el.dataset.line); const key = lkey(c, it); const day = ui.sheetDay.day; const s = el.dataset.s;
+      const prev = (S.marks[day] || {})[key];
+      if (s === 'plus' || s === 'minus') { const x = ((prev && +prev.x) || 0) + (s === 'plus' ? 1 : -1); setMark(key, day, x > 0 ? { s: 'extra', x } : null); }
+      else if (s === 'extra') setMark(key, day, { s: 'extra', x: prev && prev.s === 'extra' ? +prev.x + stepOf(prod(it.productId).unit) : stepOf(prod(it.productId).unit) });
+      else setMark(key, day, { s });
+      save(); render(); daySheet(c, day);
+    },
     closed() {
       askThen(t('shopClosedAsk'), () => {
-      const day = ui.day; const before = JSON.parse(JSON.stringify(S.marks[day] || {}));
-      active().forEach((c) => { if ((c.sched || {}).type !== 'demand' && dayInfo(c, day).st !== 'none' && dayInfo(c, day).st !== 'away') setMark(c.id, day, { s: 'skip' }); });
-      save(); render();
-      toast(t('shopClosed'), () => { S.marks[day] = before; if (!Object.keys(before).length) delete S.marks[day]; save(); render(); });
+        const day = ui.day; const before = JSON.parse(JSON.stringify(S.marks[day] || {}));
+        active().forEach((c) => lines(c).forEach((it) => { const st = lineInfo(c, it, day).st; if ((it.sched || {}).type !== 'demand' && st !== 'none' && st !== 'away') setMark(lkey(c, it), day, { s: 'skip' }); }));
+        save(); render();
+        toast(t('shopClosed'), () => { S.marks[day] = before; if (!Object.keys(before).length) delete S.marks[day]; save(); render(); });
       });
     },
     voice(el) { voice(el); },
-    sched(el) {
-      ui.form.type = el.dataset.val;
-      el.parentNode.querySelectorAll('.opt').forEach((b) => b.classList.toggle('on', b === el));
-      $('#daysbox').classList.toggle('hidden', ui.form.type !== 'days');
-      $('#qtybox').classList.toggle('hidden', ui.form.type === 'demand');
+    sched(el) { formTap(() => { formIdx(el).type = el.dataset.val; }); },
+    wday(el) { formTap(() => { const a = formIdx(el).days; const d = +el.dataset.val; const i = a.indexOf(d); if (i >= 0) a.splice(i, 1); else a.push(d); }); },
+    fprod(el) { formTap(() => { const x = formIdx(el); x.pid = el.dataset.val; const st = stepOf(prod(x.pid).unit); x.qty = Math.max(st, Math.round(x.qty / st) * st); }); },
+    qty(el) { formTap(() => { const x = formIdx(el); const st = stepOf(prod(x.pid).unit); x.qty = Math.max(st, Math.round((x.qty + st * +el.dataset.n) / st) * st); }); },
+    qtyset(el) { formTap(() => { formIdx(el).qty = +el.dataset.val; }); },
+    additem() {
+      formTap((F) => {
+        const used = F.items.map((x) => x.pid);
+        const p = S.products.find((x) => !used.includes(x.id)) || S.products[0] || {};
+        F.items.push(formItem({ productId: p.id, qty: 1, sched: { type: 'daily', days: [1, 3, 5] } }));
+      });
     },
-    wday(el) {
-      const d = +el.dataset.val; const a = ui.form.days;
-      const i = a.indexOf(d); if (i >= 0) a.splice(i, 1); else a.push(d);
-      el.classList.toggle('on', i < 0); el.setAttribute('aria-pressed', String(i < 0));
-    },
-    qty(el) { ui.form.qty = Math.max(0.5, Math.round((ui.form.qty + +el.dataset.n) * 2) / 2); $('#f-qty').textContent = fq(ui.form.qty); },
+    delitem(el) { formTap((F) => { F.items.splice(+el.dataset.i, 1); }); },
     savecust(el) {
-      const name = $('#f-name').value.trim();
+      snapForm();
+      const F = ui.form, f = F.f;
+      const name = (f.name || '').trim();
       if (!name) { $('#f-name').focus(); return; }
       let c = el.dataset.id ? cust(el.dataset.id) : null;
-      if (!c) { c = { id: uid(), start: todayStr(), pauses: [] }; S.customers.push(c); }
+      if (!c) { c = { id: uid(), start: f.start || todayStr(), pauses: [] }; S.customers.push(c); }
       Object.assign(c, {
-        name, flat: $('#f-flat').value.trim(), sector: $('#f-sector').value.trim(), phone: $('#f-phone').value.trim(),
-        productId: $('#f-prod').value, qty: ui.form.qty, sched: { type: ui.form.type, days: ui.form.days.slice().sort() },
-        rate: $('#f-rate').value === '' ? '' : +$('#f-rate').value, opening: $('#f-open').value === '' ? '' : +$('#f-open').value
+        name, flat: (f.flat || '').trim(), sector: (f.sector || '').trim(), phone: (f.phone || '').trim(), opening: f.opening === '' || f.opening == null ? '' : +f.opening,
+        items: F.items.map((x, n) => ({ id: x.id || (n === 0 && !c.items ? c.id : uid()), productId: x.pid, qty: x.qty, sched: { type: x.type, days: x.days.slice().sort() }, rate: x.rate === '' || x.rate == null ? '' : +x.rate }))
       });
+      ui.form = null;
       save(); location.hash = '#/c/' + c.id; toast(t('saved'));
     },
     delcust(el, id) {
       askThen(t('deleteAsk'), () => {
-      S.customers = S.customers.filter((c) => c.id !== id);
-      S.payments = S.payments.filter((p) => p.cid !== id);
-      Object.keys(S.marks).forEach((d) => { delete S.marks[d][id]; if (!Object.keys(S.marks[d]).length) delete S.marks[d]; });
-      save(); location.hash = '#/customers';
+        S.customers = S.customers.filter((c) => c.id !== id);
+        S.payments = S.payments.filter((p) => p.cid !== id);
+        Object.keys(S.marks).forEach((d) => { Object.keys(S.marks[d]).forEach((k) => { if (k === id || k.startsWith(id + '.')) delete S.marks[d][k]; }); if (!Object.keys(S.marks[d]).length) delete S.marks[d]; });
+        save(); location.hash = '#/customers';
       });
     },
     pay(el, id) { paySheet(id); },
-    paymode(el) { ui.pay.mode = el.dataset.val; el.parentNode.querySelectorAll('.opt').forEach((b) => b.classList.toggle('on', b === el)); },
+    paypick() { payPickSheet(); },
+    duesheet() { dueSheet(); },
+    bmonth(el) { ui.bym = shiftMonth(ui.bym || monthOf(todayStr()), +el.dataset.n); render(); },
+    ratesheet(el, id) { rateSheet(id); },
+    saverate(el, id) {
+      const p = S.products.find((x) => x.id === id);
+      p.name = $('#r-name').value.trim() || p.name; p.unit = $('#r-unit').value.trim() || p.unit; p.rate = +$('#r-rate').value || 0;
+      save(); closeSheet(); render(); toast(t('saved'));
+    },
+    paymode(el) { ui.pay.mode = el.dataset.val; onlyOn(el); },
     key(el) {
       const k = el.dataset.val; let a = ui.pay.amt;
       if (k === 'del') a = a.slice(0, -1); else if (k === 'full') a = String(ui.pay.due); else if (a.length < 7) a = (a + k).replace(/^0+/, '');
@@ -763,7 +1060,7 @@
       const from = $('#p-from').value, to = $('#p-to').value;
       if (!from || !to || to < from) return;
       const c = cust(id); c.pauses = c.pauses || []; c.pauses.push({ from, to });
-      save(); closeSheet(); render(); toast(t('pause') + ': ' + from + ' – ' + to);
+      save(); closeSheet(); render(); toast(t('pause') + ': ' + dshort(from) + ' – ' + dshort(to));
     },
     delpause(el, id) { const c = cust(id); c.pauses = c.pauses.filter((p) => p.from !== el.dataset.from); save(); closeSheet(); render(); },
     copylink(el, id) {
@@ -784,7 +1081,7 @@
       const box = $('#linkbox'); box.select();
       if (navigator.clipboard) navigator.clipboard.writeText(box.value).then(() => toast(t('copied')), () => {});
     },
-    addprod() { S.products.push({ id: uid(), name: 'Item', unit: 'unit', rate: 10 }); save(); render(); },
+    addprod() { const p = { id: uid(), name: 'Item', unit: 'unit', rate: 10 }; S.products.push(p); save(); render(); rateSheet(p.id); },
     savesettings() {
       const v = S.vendor;
       v.name = $('#s-name').value.trim() || v.name; v.phone = $('#s-phone').value.trim(); v.upi = $('#s-upi').value.trim(); v.limit = +$('#s-limit').value || 0;
@@ -799,39 +1096,53 @@
   };
   document.addEventListener('input', (e) => {
     if (e.target.id === 'search') { ui.q = e.target.value; const pos = e.target.selectionStart; render(); const s = $('#search'); s.focus(); s.setSelectionRange(pos, pos); }
+    if (e.target.dataset && e.target.dataset.rate != null && ui.form) { ui.form.items[+e.target.dataset.rate].rate = e.target.value; $('#f-est').textContent = estimate(ui.form.items); }
   });
   document.addEventListener('change', (e) => {
     if (e.target.id !== 'restore' || !e.target.files[0]) return;
     const r = new FileReader();
-    r.onload = () => { try { const d = JSON.parse(r.result); if (!d.vendor || !Array.isArray(d.customers)) throw 0; S = d; save(); location.hash = '#/home'; render(); toast(t('saved')); } catch (err) { toast('Wrong file'); } };
+    r.onload = () => { try { const d = JSON.parse(r.result); if (!d.vendor || !Array.isArray(d.customers)) throw 0; S = d; S.customers.forEach(lines); save(); location.hash = '#/home'; render(); toast(t('saved')); } catch (err) { toast('Wrong file'); } };
     r.readAsText(e.target.files[0]);
   });
   window.addEventListener('online', () => render());
   window.addEventListener('offline', () => render());
 
   // ---------- router ----------
+  const isRoute = (r) => r === '' || r === 'home' || r === 'today';
+  function tabBar(cur) {
+    const tabs = [['home', 'truck', 'tabRoute'], ['customers', 'users', 'tabCustomers'], ['edit/new', 'plus', 'tabAdd'], ['money', 'receipt', 'tabBilling'], ['stock', 'can', 'tabStock']];
+    return '<nav class="tabbar" aria-label="Main"><div class="in">' + tabs.map(([r, icon, lab]) => {
+      const on = r === cur;
+      return '<a class="tab' + (on ? ' on' : '') + (r === 'edit/new' ? ' fab' : '') + '" href="#/' + r + '"' + (on ? ' aria-current="page"' : '') + '><span class="pip">' + ic(icon) + '</span>' + esc(t(lab)) + '</a>';
+    }).join('') + '</div></nav>';
+  }
   function render() {
     const h = location.hash.replace(/^#\/?/, '');
     const [route, a, b] = h.split('/');
     document.documentElement.lang = S.vendor.lang === 'hi' ? 'hi' : 'en';
     let html;
-    if (route === 's') html = viewPublic(a || '');
+    const r = route || '';
+    if (r === 's') html = viewPublic(a || '');
     else if (!S.vendor.name) html = viewWelcome();
-    else if (route === 'today') html = viewToday();
-    else if (route === 'customers') html = viewCustomers();
-    else if (route === 'edit') html = viewEdit(a);
-    else if (route === 'c') { ui.cid = a; html = viewCustomer(a, b); }
-    else if (route === 'money') html = viewMoney();
-    else if (route === 'stock') html = viewStock();
-    else if (route === 'settings') html = viewSettings();
-    else html = viewHome();
-    $('#app').innerHTML = html;
+    else if (isRoute(r)) html = viewRoute();
+    else if (r === 'customers') html = viewCustomers();
+    else if (r === 'edit') html = viewEdit(a);
+    else if (r === 'c') { ui.cid = a; html = viewCustomer(a, b); }
+    else if (r === 'money') html = viewBilling();
+    else if (r === 'stock') html = viewStock();
+    else if (r === 'settings') html = viewSettings();
+    else html = viewRoute();
+    const tabbed = r !== 's' && !!S.vendor.name && (isRoute(r) || ['customers', 'money', 'stock'].includes(r) || (r === 'edit' && a === 'new'));
+    const cur = isRoute(r) ? 'home' : r === 'edit' ? 'edit/new' : r;
+    document.body.classList.toggle('has-nav', tabbed);
+    document.body.classList.toggle('has-run', tabbed && isRoute(r) && active().length > 0);
+    $('#app').innerHTML = html + (tabbed ? tabBar(cur) : '');
   }
   let lastRoute = '';
   window.addEventListener('hashchange', () => {
     const r = location.hash.split('/')[1] || '';
-    if (r === 'today' && lastRoute !== 'today') ui.day = todayStr();
-    lastRoute = r; closeSheet(); $('#toast').hidden = true; render(); window.scrollTo(0, 0);
+    if (isRoute(r) && !isRoute(lastRoute)) { ui.day = todayStr(); ui.edit = null; }
+    lastRoute = r; ui.form = null; closeSheet(); $('#toast').hidden = true; render(); window.scrollTo(0, 0);
   });
   lastRoute = location.hash.split('/')[1] || '';
   render();
