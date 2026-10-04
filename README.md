@@ -18,7 +18,7 @@ It is built for people who may not read much, so it uses large text, icons, fixe
 ```
 app/                  the whole app, plain HTML, CSS and JavaScript (no build step)
   index.html
-  styles.css          Doodh Blue theme tokens and components
+  styles.css          theme tokens (colors, type) and components
   i18n.js             English and Hindi strings
   app.js              ledger rules, screens and actions
   sw.js               offline cache

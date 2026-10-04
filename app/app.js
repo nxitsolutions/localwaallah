@@ -56,6 +56,7 @@
     pause: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M10 12v5M14 12v5"/>',
     plus: '<path d="M12 5v14M5 12h14"/>', edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+    home: '<path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 19z"/>',
     close: '<path d="M6 6l12 12M18 6 6 18"/>', link: '<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>'
   };
   const ic = (name, cls) => '<svg class="i ' + (cls || '') + '" viewBox="0 0 24 24" aria-hidden="true">' + P[name] + '</svg>';
@@ -147,6 +148,7 @@
   }
 
   // ---------- shared bits ----------
+  const brandHtml = () => '<span class="brand"><span class="mark">' + ic('can') + '</span><span>Local<em>Waallah</em></span></span>';
   const langBtn = () => '<button class="iconbtn" data-act="lang" aria-label="Change language">' + (S.vendor.lang === 'hi' ? 'A' : 'अ') + '</button>';
   const syncPill = () => navigator.onLine && saveOk
     ? '<span class="pill" role="img" aria-label="' + esc(t('saved')) + '" style="color:var(--given)">' + ic('cloud', 'sm') + '</span>'
@@ -174,8 +176,8 @@
   // ---------- views ----------
   function viewWelcome() {
     const types = ['milk', 'paper', 'water', 'laundry', 'other'];
-    return '<div class="topbar"><span class="brand">LocalWaallah</span>' + langBtn() + '</div>' +
-      '<div class="hero"><div class="sun"></div><img src="' + heroImg + '" alt=""><div class="hello"><span class="muted" style="font-weight:600;font-size:18px">' + esc(t('welcome')) + '</span><b>LocalWaallah</b></div></div>' +
+    return '<div class="topbar">' + brandHtml() + langBtn() + '</div>' +
+      '<div class="hero"><div class="sun"></div><img src="' + heroImg + '" alt=""><div class="hello"><span class="hi">' + esc(t('welcome')) + '</span><b style="font-size:24px">LocalWaallah</b></div></div>' +
       '<div class="form">' +
       '<div class="field"><label for="w-name">' + esc(t('vendorName')) + '</label><input id="w-name" autocomplete="organization" placeholder="Ramesh Dairy"></div>' +
       '<div class="field"><span class="lab">' + esc(t('whatSell')) + '</span><div class="opts" id="w-type">' +
@@ -194,24 +196,29 @@
     let due = 0, dueN = 0;
     active().forEach((c) => { const b = balance(c, day); if (b > 0.5) { due += b; dueN++; } });
     const name = S.vendor.name.split(' ')[0] || S.vendor.name;
-    return '<div class="topbar"><span class="brand">LocalWaallah</span><div class="row">' + syncPill() + langBtn() +
+    return '<div class="topbar">' + brandHtml() + '<div class="row">' + syncPill() + langBtn() +
       '<a class="iconbtn" href="#/settings" aria-label="' + esc(t('settings')) + '">' + ic('gear', 'sm') + '</a></div></div>' +
       '<div class="hero"><svg class="squiggle" width="150" height="70" viewBox="0 0 150 70" fill="none" aria-hidden="true"><path d="M2 40c30-26 52-30 58-12 6 16-14 22-16 8-2-16 30-24 52-6 12 10 30 12 50 0" stroke="#14213D" stroke-width="2" stroke-dasharray="5 6" stroke-linecap="round"/></svg>' +
       '<div class="sun"></div><img src="' + heroImg + '" alt="">' +
-      '<div class="hello"><span class="muted" style="font-size:18px;font-weight:600">' + esc(t('namaste')) + '</span><b>' + esc(name) + '</b><span class="date">' + esc(parse(day).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })) + '</span></div>' +
-      '<div class="prog"><span class="head" style="font-size:28px;font-weight:800;line-height:1">' + n.houses + '</span><span class="muted" style="font-size:14px;font-weight:600">' + esc(t('houses')) + ' · ' + esc(t('today')) + '</span>' +
+      '<div class="hello"><span class="hi">' + esc(t('namaste')) + '</span><b>' + esc(name) + '</b><span class="date">' + esc(parse(day).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })) + '</span></div>' +
+      '<div class="prog"><span class="num">' + n.houses + '</span><span class="lab">' + esc(t('houses')) + ' · ' + esc(t('today')) + '</span>' +
       '<div class="bar">' + seg('done', 'var(--given)') + seg('extra', 'var(--extra)') + seg('half', 'var(--half)') + seg('skip', 'var(--skip)') + seg('away', 'var(--away)') + '</div></div></div>' +
       '<svg class="flow" viewBox="0 0 390 44" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M292 0 C292 22 112 14 112 40" stroke="#1D4E9E" stroke-width="2.5" stroke-dasharray="6 6" stroke-linecap="round"/><path d="M292 0 C292 18 290 26 290 40" stroke="#1D4E9E" stroke-width="2.5" stroke-dasharray="6 6" stroke-linecap="round"/><circle cx="292" cy="3" r="5" fill="#1D4E9E"/><circle cx="112" cy="40" r="4" fill="#1D4E9E"/><circle cx="290" cy="40" r="4" fill="#1D4E9E"/></svg>' +
       '<div class="tiles">' +
       '<a class="tile main" href="#/today"><span class="ic">' + ic('list', 'lg') + '</span><span class="badge">' + n.houses + '</span><span><b>Deliver today</b><small>आज की डिलीवरी</small></span></a>' +
-      '<a class="tile" href="#/stock"><span class="ic">' + ic('can', 'lg') + '</span><span><b>Morning stock</b><small>सुबह का स्टॉक</small></span></a>' +
-      '<a class="tile" href="#/customers"><span class="ic">' + ic('users', 'lg') + '</span><span><b>Customers</b><small>ग्राहक · ' + active().length + '</small></span></a>' +
-      '<a class="tile" href="#/money"><span class="ic">' + ic('rupee', 'lg') + '</span><span><b>Collect money</b><small>पैसे लें</small></span></a>' +
+      '<a class="tile t-amber" href="#/stock"><span class="ic">' + ic('can', 'lg') + '</span><span><b>Morning stock</b><small>सुबह का स्टॉक</small></span></a>' +
+      '<a class="tile t-violet" href="#/customers"><span class="ic">' + ic('users', 'lg') + '</span><span><b>Customers</b><small>ग्राहक · ' + active().length + '</small></span></a>' +
+      '<a class="tile t-green" href="#/money"><span class="ic">' + ic('rupee', 'lg') + '</span><span><b>Collect money</b><small>पैसे लें</small></span></a>' +
       '</div>' +
       '<div class="duebar"><a class="duecard' + (dueN ? '' : ' ok') + '" href="#/money"><span class="dot" style="background:var(--' + (dueN ? 'skip' : 'given') + ')">' + ic(dueN ? 'alert' : 'check') + '</span>' +
-      '<span class="col"><span class="head" style="font-size:22px;font-weight:800">' + (dueN ? rupees(due) + ' ' + esc(t('due')) : esc(t('nobodyOwes'))) + '</span>' +
-      (dueN ? '<span class="muted" style="font-size:14px;font-weight:600">' + dueN + ' ' + esc(t('dueHouses')) + '</span>' : '') + '</span></a>' +
-      micBtn('mic') + '</div>';
+      '<span class="col"><span class="head" style="font-size:21px;font-weight:800">' + (dueN ? rupees(due) + ' ' + esc(t('due')) : esc(t('nobodyOwes'))) + '</span>' +
+      (dueN ? '<span class="muted" style="font-size:14px;font-weight:600">' + dueN + ' ' + esc(t('dueHouses')) + '</span>' : '') + '</span><span class="chev">' + ic('next') + '</span></a>' + micBtn('mic') + '</div>';
+  }
+  const fabs = (inner) => '<div class="fabs"><div class="in">' + inner + '</div></div>';
+  function tabBar(cur) {
+    const tabs = [['home', 'home', 'tabHome'], ['today', 'list', 'tabDeliver'], ['customers', 'users', 'tabCustomers'], ['money', 'rupee', 'tabMoney'], ['stock', 'can', 'tabStock']];
+    return '<nav class="tabbar" aria-label="Main"><div class="in">' + tabs.map(([r, icon, lab]) =>
+      '<a class="tab' + (r === cur ? ' on' : '') + '" href="#/' + r + '"' + (r === cur ? ' aria-current="page"' : '') + '><span class="pip">' + ic(icon) + '</span>' + esc(t(lab)) + '</a>').join('') + '</div></nav>';
   }
   const micBtn = (cls) => '<button class="' + cls + '" data-act="voice" aria-label="Speak a change">' + ic('mic') + '<span>' + esc(t('speak')) + '</span></button>';
 
@@ -222,7 +229,7 @@
     if (ui.sector && !sectors.includes(ui.sector)) ui.sector = '';
     const shown = all.filter((c) => (!ui.sector || c.sector === ui.sector) && dayInfo(c, day).st !== 'none' || ((c.sched || {}).type === 'demand' && (!ui.sector || c.sector === ui.sector)));
     const n = todayCounts(day);
-    let html = '<div class="phead"><div class="row"><a class="iconbtn ghost" href="#/home" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a>' +
+    let html = '<div class="phead"><div class="row">' +
       '<div class="col grow"><h1>' + esc(t('todayDelivery')) + '</h1><span class="sub">' + esc(dayLabel(day)) + '</span></div>' +
       '<div class="col"><span class="big">' + n.houses + '</span><span class="sub" style="font-size:13px;text-align:right">' + esc(t('houses')) + '</span></div></div>' +
       '<div class="row" style="gap:8px"><button class="iconbtn ghost" data-act="day" data-n="-1" aria-label="Previous day">' + ic('back') + '</button>' +
@@ -246,8 +253,8 @@
       html += deliveryRow(c, day);
     });
     html += '</div>';
-    if (active().length) html += '<div class="pad" style="margin-top:18px"><button class="bigbtn red" style="width:100%;min-height:54px;font-size:17px" data-act="closed">' + esc(t('shopClosed')) + '</button></div>';
-    html += '<div class="bottom"><div class="in"><a class="bigbtn green" href="#/home">' + ic('check') + esc(t('allDone')) + '</a>' + micBtn('mic') + '</div></div>';
+    if (active().length) html += '<div class="pad" style="margin-top:20px"><button class="bigbtn red" style="width:100%;min-height:54px;font-size:16px" data-act="closed">' + ic('pause') + esc(t('shopClosed')) + '</button></div>';
+    html += fabs(micBtn('mic'));
     return html;
   }
 
@@ -272,7 +279,7 @@
     const q = ui.q.trim().toLowerCase();
     const list = sortRoute(active()).filter((c) => !q || (c.name + ' ' + (c.flat || '') + ' ' + (c.sector || '')).toLowerCase().includes(q));
     const day = todayStr();
-    let html = '<div class="phead"><div class="row"><a class="iconbtn ghost" href="#/home" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a><div class="col grow"><h1>' + esc(t('customers')) + '</h1><span class="sub">ग्राहक · ' + active().length + '</span></div></div></div>' +
+    let html = '<div class="phead"><div class="row"><div class="col grow"><h1>' + esc(t('customers')) + '</h1><span class="sub">ग्राहक · ' + active().length + '</span></div></div></div>' +
       '<div class="searchbox"><input id="search" type="search" placeholder="' + esc(t('search')) + '" value="' + esc(ui.q) + '" aria-label="' + esc(t('search')) + '"></div><div class="list" style="margin-top:8px">';
     if (!list.length) html += '<div class="empty">' + esc(t('noCustomers')) + '</div>';
     list.forEach((c) => {
@@ -280,7 +287,7 @@
       html += '<a class="crow" href="#/c/' + c.id + '"><span class="flatb">' + esc(c.flat || '•') + '</span><span class="col grow"><span class="head" style="font-size:20px;font-weight:700">' + esc(c.name) + '</span><span class="muted" style="font-size:15px;font-weight:600">' + esc(qtyText(c)) + (c.sector ? ' · ' + esc(c.sector) : '') + '</span></span>' +
         '<span class="amt' + (b > (+S.vendor.limit || 1e12) ? ' red' : '') + '">' + (b > 0.5 ? rupees(b) : '') + '</span></a>';
     });
-    html += '</div><div class="bottom"><div class="in"><a class="bigbtn" href="#/edit/new">' + ic('plus') + esc(t('addCustomer')) + '</a></div></div>';
+    html += '</div>' + fabs('<a class="bigbtn" href="#/edit/new">' + ic('plus') + esc(t('addCustomer')) + '</a>');
     return html;
   }
 
@@ -377,7 +384,7 @@
     const todays = S.payments.filter((p) => p.date === day);
     const cash = todays.filter((p) => p.mode === 'cash').reduce((a, p) => a + +p.amt, 0);
     const other = todays.reduce((a, p) => a + +p.amt, 0) - cash;
-    let html = '<div class="phead"><div class="row"><a class="iconbtn ghost" href="#/home" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a><div class="col grow"><h1>' + esc(t('money')) + '</h1><span class="sub">' + esc(dayLabel(day)) + '</span></div></div></div>' +
+    let html = '<div class="phead"><div class="row"><div class="col grow"><h1>' + esc(t('money')) + '</h1><span class="sub">' + esc(dayLabel(day)) + '</span></div></div></div>' +
       '<div class="card"><div class="kv"><span>' + esc(t('totalDue')) + '</span><span class="head" style="font-size:26px;color:var(--skip)">' + rupees(total) + '</span></div>' +
       '<div class="kv"><span>' + esc(t('collectedToday')) + '</span><span class="head" style="font-size:22px;color:var(--given)">' + rupees(cash + other) + '</span></div>' +
       '<div class="kv"><span>' + esc(t('cashInHand')) + '</span><span>' + rupees(cash) + ' ' + esc(t('cash')) + ' · ' + rupees(other) + ' UPI/' + esc(t('bank')) + '</span></div></div>' +
@@ -385,9 +392,9 @@
     if (!rows.length) html += '<div class="empty">' + esc(t('nobodyOwes')) + '</div>';
     rows.forEach(({ c, b }) => {
       const over = limit && b > limit;
-      html += '<div class="crow" style="' + (over ? 'border-color:var(--skip)' : '') + '"><a class="flatb" href="#/c/' + c.id + '" style="text-decoration:none;color:inherit">' + esc(c.flat || '•') + '</a>' +
+      html += '<div class="crow"><a class="flatb" href="#/c/' + c.id + '" style="text-decoration:none;color:inherit">' + esc(c.flat || '•') + '</a>' +
         '<a class="col grow" href="#/c/' + c.id + '" style="text-decoration:none;color:inherit"><span class="head" style="font-size:20px;font-weight:700">' + esc(c.name) + '</span>' +
-        (over ? '<span style="color:var(--skip);font-weight:700;font-size:14px">' + esc(t('overLimit')) + '</span>' : '<span class="muted" style="font-size:14px">' + esc(c.sector || '') + '</span>') + '</a>' +
+        (over ? '<span style="align-self:flex-start;margin-top:2px;padding:2px 8px;border-radius:999px;background:var(--tint-rose);color:#B4231A;font-weight:700;font-size:12px">' + esc(t('overLimit')) + '</span>' : '<span class="muted" style="font-size:14px">' + esc(c.sector || '') + '</span>') + '</a>' +
         '<button class="sbtn small s-done" style="width:110px" data-act="pay" data-id="' + c.id + '"><span class="head" style="font-size:19px">' + rupees(b) + '</span><span style="font-size:12px">' + esc(t('received')) + '</span></button></div>';
     });
     return html + '</div>';
@@ -415,7 +422,7 @@
     const day = ui.stockDay === 'tomorrow' ? addDays(todayStr(), 1) : todayStr();
     const s = stockFor(day);
     const litres = s.items.filter((x) => x.p.unit === 'L').reduce((a, x) => a + x.qty, 0);
-    let html = '<div class="minihero withback"><div class="sun"></div><img src="' + heroImg + '" alt=""><a class="iconbtn back" href="#/home" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a>' +
+    let html = '<div class="minihero"><div class="sun"></div><img src="' + heroImg + '" alt="">' +
       '<h1>' + esc(t('stock')) + '</h1><span class="muted" style="font-weight:600">' + esc(dayLabel(day)) + '</span></div>' +
       '<div class="chips"><button class="chip' + (ui.stockDay === 'today' ? ' on' : '') + '" data-act="stockday" data-val="today">' + esc(t('today')) + '</button><button class="chip' + (ui.stockDay === 'tomorrow' ? ' on' : '') + '" data-act="stockday" data-val="tomorrow">' + esc(t('tomorrow')) + '</button></div>';
     html += '<div class="totalcard"><div class="col"><span style="font-weight:600;opacity:.9">' + esc(t('totalMilk')) + '</span><strong>' + (litres ? fq(litres) + ' L' : s.items.length ? fq(s.items[0].qty) + ' ' + esc(s.items[0].p.unit) : '0') + '</strong></div>' +
@@ -428,7 +435,7 @@
         while (left >= 40) { arr.push(1); left -= 40; }
         if (left > 0) arr.push(left / 40);
         const full = arr.filter((f) => f === 1).length;
-        cans = '<div class="cans">' + arr.map(canSvg).join('') + '<span class="muted" style="font-weight:600;margin-left:6px">' + [full ? full + ' ' + (full === 1 ? t('can') : t('cans')) : '', left > 0 ? fq(left) + ' L' : ''].filter(Boolean).map(esc).join(' + ') + ' (40 L)</span></div>';
+        cans = '<div class="cans">' + arr.map(canSvg).join('') + '<span class="muted" style="font-weight:600;margin-left:6px">' + [full ? full + ' ' + (full === 1 ? t('can') : t('cans')) : '', left > 0 ? fq(left) + ' L' : ''].filter(Boolean).map(esc).join(' + ') + (full ? ' · 40 L ' + esc(t('cans')) : '') + '</span></div>';
       }
       html += '<div class="card" style="margin:0"><div class="kv" style="align-items:baseline"><span class="head" style="font-size:21px;color:var(--ink)">' + esc(x.p.name) + '</span><span class="head" style="font-size:32px">' + fq(x.qty) + ' ' + esc(x.p.unit) + '</span></div>' + cans + '</div>';
     });
@@ -436,13 +443,13 @@
     html += '</div><div class="pad" style="margin-top:12px;display:flex;flex-direction:column;gap:6px;font-weight:600">';
     if (s.extra) html += '<div class="row"><span class="d s-extra" style="width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff">+</span>' + fq(s.extra) + ' ' + esc(t('extraAsked')) + ' · ' + s.extraHouses + ' ' + esc(s.extraHouses === 1 ? t('house') : t('houses')) + '</div>';
     if (s.away) html += '<div class="row"><span class="d s-away" style="width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff">॥</span>' + fq(s.away) + ' ' + esc(t('lessAway')) + ' · ' + s.awayHouses + ' ' + esc(s.awayHouses === 1 ? t('house') : t('houses')) + '</div>';
-    html += '</div><div class="bottom"><div class="in"><a class="bigbtn green" target="_blank" rel="noopener" href="' + esc(waLink('', S.vendor.name + ' · ' + dayLabel(day) + '\n' + s.items.map((x) => x.p.name + ': ' + fq(x.qty) + ' ' + x.p.unit).join('\n'))) + '">' + ic('chat') + esc(t('sendDairy')) + '</a></div></div>';
+    html += '</div><div class="navrow"><a class="bigbtn green" target="_blank" rel="noopener" href="' + esc(waLink('', S.vendor.name + ' · ' + dayLabel(day) + '\n' + s.items.map((x) => x.p.name + ': ' + fq(x.qty) + ' ' + x.p.unit).join('\n'))) + '">' + ic('chat') + esc(t('sendDairy')) + '</a></div>';
     return html;
   }
 
   function viewSettings() {
     const v = S.vendor;
-    return '<div class="phead"><div class="row"><a class="iconbtn ghost" href="#/home" aria-label="' + esc(t('back')) + '">' + ic('back') + '</a><div class="col grow"><h1>' + esc(t('settings')) + '</h1></div></div></div><div class="form">' +
+    return '<div class="phead"><div class="row"><div class="col grow"><h1>' + esc(t('settings')) + '</h1></div></div></div><div class="form">' +
       '<div class="field"><label for="s-name">' + esc(t('vendorName')) + '</label><input id="s-name" value="' + esc(v.name) + '"></div>' +
       '<div class="field"><label for="s-phone">' + esc(t('yourPhone')) + '</label><input id="s-phone" type="tel" inputmode="tel" value="' + esc(v.phone) + '"></div>' +
       '<div class="field"><label for="s-upi">' + esc(t('upiId')) + '</label><input id="s-upi" value="' + esc(v.upi) + '" autocapitalize="off"></div>' +
@@ -825,7 +832,9 @@
     else if (route === 'stock') html = viewStock();
     else if (route === 'settings') html = viewSettings();
     else html = viewHome();
-    $('#app').innerHTML = html;
+    const tabbed = ['', 'home', 'today', 'customers', 'money', 'stock'].includes(route || '') && route !== 's' && S.vendor.name;
+    document.body.classList.toggle('has-nav', !!tabbed);
+    $('#app').innerHTML = html + (tabbed ? tabBar(route || 'home') : '');
   }
   let lastRoute = '';
   window.addEventListener('hashchange', () => {

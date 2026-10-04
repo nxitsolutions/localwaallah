@@ -29,7 +29,7 @@ window.STRINGS = {
     noApp: 'no app needed', askPause: 'Ask to pause', askExtra: 'Ask for extra', unitsFor: 'for',
     deliveredDays: 'Given', tapDay: 'Tap a day to change it', copied: 'Link copied', cans: 'cans', can: 'can',
     house: 'house', away2: 'away', open: 'Open', back: 'Back', editCustomer: 'Edit customer', history: 'Payments',
-    noPayments: 'No payments yet', cashInHand: 'Cash in hand today', allSectors: 'All areas', newRateFrom: 'Rate', custLink: 'Customer link (no app needed)', yesDo: 'Yes', copy: 'Copy'
+    noPayments: 'No payments yet', cashInHand: 'Cash in hand today', allSectors: 'All areas', newRateFrom: 'Rate', custLink: 'Customer link (no app needed)', yesDo: 'Yes', copy: 'Copy', tabHome: 'Home', tabDeliver: 'Deliver', tabCustomers: 'Customers', tabMoney: 'Money', tabStock: 'Stock'
   },
   hi: {
     namaste: 'नमस्ते,', houses: 'घर', saved: 'सेव', offline: 'नेटवर्क नहीं। फ़ोन में सेव है।',
@@ -60,6 +60,6 @@ window.STRINGS = {
     noApp: 'ऐप की ज़रूरत नहीं', askPause: 'रोकने को कहें', askExtra: 'ज़्यादा माँगें', unitsFor: '',
     deliveredDays: 'दिया', tapDay: 'बदलने के लिए दिन दबाएँ', copied: 'लिंक कॉपी हुआ', cans: 'कैन', can: 'कैन',
     house: 'घर', away2: 'छुट्टी', open: 'खोलें', back: 'पीछे', editCustomer: 'ग्राहक बदलें', history: 'जमा पैसे',
-    noPayments: 'अभी कोई जमा नहीं', cashInHand: 'आज हाथ में नकद', allSectors: 'सब इलाके', newRateFrom: 'रेट', custLink: 'ग्राहक लिंक (ऐप नहीं चाहिए)', yesDo: 'हाँ', copy: 'कॉपी'
+    noPayments: 'अभी कोई जमा नहीं', cashInHand: 'आज हाथ में नकद', allSectors: 'सब इलाके', newRateFrom: 'रेट', custLink: 'ग्राहक लिंक (ऐप नहीं चाहिए)', yesDo: 'हाँ', copy: 'कॉपी', tabHome: 'होम', tabDeliver: 'डिलीवरी', tabCustomers: 'ग्राहक', tabMoney: 'पैसे', tabStock: 'स्टॉक'
   }
 };
