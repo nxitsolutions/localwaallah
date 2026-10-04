@@ -1264,8 +1264,6 @@
     if (/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)) return t('badLogin');
     if (/email-already-in-use/.test(c)) return t('emailUsed');
     if (/weak-password/.test(c)) return t('weakPw');
-    if (/invalid-phone-number|missing-phone-number/.test(c)) return t('badPhone');
-    if (/invalid-verification-code|code-expired|missing-verification-code/.test(c)) return t('badOtp');
     if (/too-many-requests|quota-exceeded/.test(c)) return t('tooMany');
     if (/network-request-failed/.test(c)) return t('needNet');
     if (/popup-closed-by-user|cancelled-popup-request/.test(c)) return '';
@@ -1278,19 +1276,12 @@
   const viewSplash = () => '<div class="splash"><span class="logo">' + ic('can', 'lg') + '</span><b>LocalWaallah</b><span class="muted">' + esc(t('loading')) + '</span></div>';
   const GOOGLE = '<svg class="i" viewBox="0 0 48 48" aria-hidden="true" style="stroke:none"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
   function viewLogin() {
-    const L = ui.login || (ui.login = { tab: 'phone', email: '', phone: '', signup: false, otpSent: false });
+    const L = ui.login || (ui.login = { email: '', signup: false });
     const dis = ui.busy ? ' disabled' : '';
     let box;
     if (auth.dev) {
       box = '<div class="field"><label for="l-dev">' + esc(t('devLogin')) + '</label><div class="inp">' + ic('user', 'sm') + '<input id="l-dev" placeholder="ramesh" autocomplete="off"></div></div>' +
         '<div class="stack"><button class="btn big block" data-act="devlogin">' + ic('check') + esc(t('signInBtn')) + '</button></div>';
-    } else if (L.tab === 'phone' && L.otpSent) {
-      box = '<div class="muted" style="font-weight:600;margin-top:14px">' + esc(fill('otpSentTo', { p: '+91 ' + L.phone })) + '</div>' +
-        '<div class="field"><label for="l-otp">' + esc(t('otp')) + '</label><div class="inp">' + ic('qr', 'sm') + '<input id="l-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"></div></div>' +
-        '<div class="stack"><button class="btn big block" data-act="verifyotp"' + dis + '>' + ic('check') + esc(t('verify')) + '</button><button class="linkbtn" data-act="changenum">' + esc(t('changeNum')) + '</button></div>';
-    } else if (L.tab === 'phone') {
-      box = '<div class="field"><label for="l-phone">' + esc(t('mobile')) + '</label><div class="inp"><b style="color:var(--ink)">+91</b><input id="l-phone" type="tel" inputmode="numeric" autocomplete="tel-national" maxlength="10" value="' + esc(L.phone) + '" placeholder="98765 43210"></div></div>' +
-        '<div class="stack"><button class="btn big block" data-act="sendotp"' + dis + '>' + ic('chat') + esc(t('sendOtp')) + '</button></div>';
     } else {
       box = '<div class="field"><label for="l-email">' + esc(t('email')) + '</label><div class="inp">' + ic('mail', 'sm') + '<input id="l-email" type="email" autocomplete="email" value="' + esc(L.email) + '"></div></div>' +
         '<div class="field"><label for="l-pass">' + esc(t('password')) + '</label><div class="inp">' + ic('lock', 'sm') + '<input id="l-pass" type="password" autocomplete="' + (L.signup ? 'new-password' : 'current-password') + '"></div></div>' +
@@ -1301,39 +1292,19 @@
     return '<div class="welcome"><header class="apphead"><span class="logo">' + ic('can') + '</span><div class="t"><b>LocalWaallah<small>लोकलवाला</small></b><span>' + esc(t('tagline')) + '</span></div>' + langBtn() + '</header>' +
       '<div class="greet"><img src="' + heroImg + '" alt=""><span class="hi">' + esc(t('welcome')) + '</span><b>LocalWaallah</b><span class="d">' + esc(t('tagline')) + '</span></div>' +
       '<div class="card"><h2 style="font-size:20px">' + esc(t('signIn')) + '</h2><div class="muted" style="font-size:14px;font-weight:600;margin-bottom:14px">' + esc(other('signIn')) + '</div>' +
-      (auth.dev ? '' : '<button class="btn white block gbtn" data-act="google"' + dis + '>' + GOOGLE + esc(t('google')) + '</button><div class="or"><span>' + esc(t('or')) + '</span></div>' +
-        '<div class="seg"><button type="button" class="' + (L.tab === 'phone' ? 'on' : '') + '" data-act="logintab" data-val="phone">' + ic('phone', 'sm') + esc(t('phoneTab')) + '</button><button type="button" class="' + (L.tab === 'email' ? 'on' : '') + '" data-act="logintab" data-val="email">' + ic('mail', 'sm') + esc(t('emailTab')) + '</button></div>') +
-      box + '<div id="recap"></div></div><p class="muted" style="text-align:center;font-size:13px;font-weight:600;margin:16px 8px">' + esc(t('loginNote')) + '</p></div>';
+      (auth.dev ? '' : '<button class="btn white block gbtn" data-act="google"' + dis + '>' + GOOGLE + esc(t('google')) + '</button><div class="or"><span>' + esc(t('or')) + '</span></div>') +
+      box + '</div><p class="muted" style="text-align:center;font-size:13px;font-weight:600;margin:16px 8px">' + esc(t('loginNote')) + '</p></div>';
   }
   const snapLogin = () => {
     const L = ui.login; if (!L) return;
-    if ($('#l-phone')) L.phone = digits($('#l-phone').value).slice(-10);
     if ($('#l-email')) L.email = $('#l-email').value.trim();
   };
   const authHandlers = {
-    logintab(el) { snapLogin(); ui.login.tab = el.dataset.val; render(); },
     signupflip() { snapLogin(); ui.login.signup = !ui.login.signup; render(); },
-    changenum() { ui.login.otpSent = false; render(); },
     google() {
       const fb = auth.fb; const p = new fb.auth.GoogleAuthProvider();
       p.setCustomParameters({ prompt: 'select_account' });
       (standalone() ? fbAuth().signInWithRedirect(p) : fbAuth().signInWithPopup(p)).catch(failed);
-    },
-    sendotp(el) {
-      snapLogin();
-      const L = ui.login;
-      if (L.phone.length !== 10) { toast(t('badPhone')); return; }
-      el.disabled = true;
-      if (!auth.recap) auth.recap = new auth.fb.auth.RecaptchaVerifier('recap', { size: 'invisible' });
-      fbAuth().signInWithPhoneNumber('+91' + L.phone, auth.recap)
-        .then((cr) => { ui.otp = cr; L.otpSent = true; render(); setTimeout(() => $('#l-otp') && $('#l-otp').focus(), 50); })
-        .catch((e) => { if (auth.recap) { auth.recap.clear(); auth.recap = null; } failed(e); });
-    },
-    verifyotp() {
-      const code = digits($('#l-otp').value);
-      if (code.length < 6 || !ui.otp) { toast(t('badOtp')); return; }
-      ui.busy = true; render();
-      ui.otp.confirm(code).then(() => { ui.busy = false; }).catch(failed);
     },
     emailgo() {
       snapLogin();

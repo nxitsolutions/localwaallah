@@ -356,4 +356,3 @@ body.has-run #toast { bottom: calc(176px + env(safe-area-inset-bottom)); }
 .live.busy { background: var(--amber); color: var(--on-amber); }
 .live.busy::before { background: var(--on-amber); }
 .btn[disabled] { opacity: .6; }
-#recap { margin-top: 8px; }

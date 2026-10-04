@@ -1,6 +1,6 @@
 # LocalWaallah server
 
-Signs vendors in with Firebase (Google, email and password, or phone OTP), keeps each vendor's
+Signs vendors in with Firebase (Google, or email and password), keeps each vendor's
 khata in PostgreSQL, and serves the app from `../app`. Each vendor only ever sees their own khata.
 
 The app still works offline: the khata is kept on the phone and synced to the server when the
@@ -13,8 +13,6 @@ changes are kept; where both changed the very same day or customer, the phone th
 2. **Build → Authentication → Get started → Sign-in method**, then enable:
    - **Google**
    - **Email/Password**
-   - **Phone** (Firebase gives a small number of free SMS a day; beyond that the project needs the
-     Blaze pay-as-you-go plan, billed per SMS)
 3. **Authentication → Settings → Authorized domains**: add the domain the app will run on,
    for example `app.yourcompany.in`.
 4. **Project settings → General → Your apps → Add app → Web**. Copy `apiKey`, `authDomain`,
@@ -41,8 +39,8 @@ node index.js
 ```
 
 The server listens on port 8080 (`PORT` changes it) and creates its two tables on first start.
-Put it behind HTTPS (nginx, Caddy or a cloud load balancer): Google sign-in, phone OTP and the
-offline app all need HTTPS on a real domain.
+Put it behind HTTPS (nginx, Caddy or a cloud load balancer): Google sign-in and the
+offline app need HTTPS on a real domain.
 
 ## Local testing without Firebase
 

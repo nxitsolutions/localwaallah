@@ -12,7 +12,7 @@ It is built for people who may not read much, so it uses large text, icons, fixe
 - **Collect money**: cash, UPI, cheque or bank payments on a big keypad, dues list with an over-limit warning, and today's cash in hand.
 - **Morning stock**: total litres for today or tomorrow shown as 40 L cans, read aloud, and sent to the dairy on WhatsApp.
 - **Several items per customer**: a house can take milk daily, paneer on weekends and curd when they call, each with its own quantity, days and rate.
-- **Vendor accounts**: on your own server, vendors sign in with Google, email or phone OTP (Firebase) and each khata is saved to PostgreSQL. See [server/README.md](server/README.md).
+- **Vendor accounts**: on your own server, vendors sign in with Google or email and password (Firebase) and each khata is saved to PostgreSQL. See [server/README.md](server/README.md).
 - **Works offline**: data is saved on the phone (localStorage) and the app shell is cached by a service worker. With the server it syncs when the phone is back online. Settings has backup and restore.
 
 ## Project layout
