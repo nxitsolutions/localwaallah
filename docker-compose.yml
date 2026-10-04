@@ -8,7 +8,8 @@ services:
     environment:
       DATABASE_URL: postgres://localwaallah:${POSTGRES_PASSWORD}@db:5432/localwaallah
     ports:
-      - "8080:8080"
+      # Only this machine can reach the app directly; Caddy or nginx in front serves it over HTTPS.
+      - "127.0.0.1:8080:8080"
     depends_on:
       db:
         condition: service_healthy

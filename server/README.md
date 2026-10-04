@@ -58,7 +58,27 @@ node index.js
 
 The server listens on port 8080 (`PORT` changes it) and creates its two tables on first start.
 Put it behind HTTPS (nginx, Caddy or a cloud load balancer): Google sign-in and the
-offline app need HTTPS on a real domain.
+offline app need HTTPS on a real domain. With docker compose the app only listens on
+127.0.0.1:8080, so the proxy is the only way in.
+
+Google sign-in from the installed app uses a redirect, which Safari and newer Chrome block when
+the sign-in page lives on another domain. So serve Firebase's sign-in pages from your own domain:
+set `FIREBASE_AUTH_DOMAIN` to your app's domain, send `/__/*` to `<project-id>.firebaseapp.com`,
+and add `https://<your domain>/__/auth/handler` as an authorized redirect URI on the
+"Web client (auto created by Google Service)" OAuth client in Google Cloud Console. A Caddyfile:
+
+```
+app.example.in {
+	handle /__/* {
+		reverse_proxy https://your-project.firebaseapp.com {
+			header_up Host {upstream_hostport}
+		}
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8080
+	}
+}
+```
 
 ## Local testing without Firebase
 
