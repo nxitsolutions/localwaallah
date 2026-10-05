@@ -38,6 +38,21 @@ houses by straight-line distance between their pins.
 The map asks Google for the road route only when the day's houses or their order change, and an
 address is looked up once and then kept with the customer, so marking deliveries costs nothing extra.
 
+## Online payments (optional, per vendor)
+
+Each vendor can connect their **own** Razorpay account in Settings → Online payments, so money goes straight to them
+and Razorpay's fee comes out of their payments. They need a Razorpay account (KYC done) and API keys from
+Razorpay Dashboard → Account & Settings → API Keys. Nothing needs to be set on this server.
+
+A customer taps **Pay now** on their page and pays through a Razorpay payment link. The server checks open links when
+the customer returns to their page, when the vendor's app checks for requests, and every 5 minutes in the background.
+When a link is paid, the server adds the payment to the vendor's khata (marked "Paid online"), so every phone sees it
+on its next sync. No webhook setup is needed. The key secret is stored in the `vendors` table and never sent to phones,
+so keep database backups private.
+
+Vendors without Razorpay still get an **I've already paid** button on the customer page: the customer enters the
+amount and UPI reference, and the vendor approves it like a pause or extra request.
+
 ## 3. Run it
 
 With Docker (app + database together):
@@ -100,6 +115,8 @@ DATABASE_URL=postgres://localhost/localwaallah DEV_LOGIN=1 node index.js
 | POST | `/api/requests/:id` | `{ status: "approved" \| "declined" }`; the vendor's phone applies an approval to the khata itself |
 | GET | `/api/public/:link` | No sign-in. One customer's share of the khata and their recent requests, for the live customer page |
 | POST | `/api/public/:link/requests` | No sign-in. A customer asks for a pause `{ kind: "pause", from, to }` or extra `{ kind: "extra", day, item, qty }` |
+| GET/PUT/DELETE | `/api/payments` | The vendor's Razorpay key id (never the secret); connect with `{ keyId, keySecret }`, checked with Razorpay first; disconnect |
+| POST | `/api/public/:link/pay` | No sign-in. Starts a Razorpay payment link for `{ amt }` and returns its URL |
 | GET | `/healthz` | Health check |
 
 Requests carry `Authorization: Bearer <Firebase ID token>`, except the two `/api/public` ones. Those are reached by the
@@ -110,4 +127,5 @@ and 5 waiting at once per customer.
 
 - `vendors`: one row per signed-in vendor (Firebase uid, email, phone, name, shop name, last seen).
 - `ledgers`: one row per vendor holding the whole khata as JSON, with a version number.
-- `requests`: pause and extra requests from customer pages, with their status (pending, approved, declined).
+- `requests`: pause, extra and "I've paid" requests from customer pages, with their status (pending, approved, declined).
+- `payment_links`: Razorpay payment links started from customer pages, until they are paid, cancelled or expire.

@@ -804,7 +804,7 @@
       '<a class="iconbtn round" href="#/c/' + c.id + '/' + shiftMonth(ym, 1) + '" aria-label="Next month">' + ic('next') + '</a></div>' + calendarHtml(cells, true) + legendHtml(counts) + '</div>';
 
     html += '<div class="card"><div class="ctitle"><h2 class="grow">' + esc(t('recentPay')) + '<small>' + esc(other('recentPay')) + '</small></h2></div><div class="log">' +
-      (pays.length ? pays.map((x) => '<div class="payrow"><span class="ic">' + ic(x.mode === 'cash' ? 'wallet' : 'qr', 'sm') + '</span><div class="grow"><b>' + rupees(x.amt) + '</b> <span class="tag pri">' + esc(t(x.mode)) + '</span><div class="muted" style="font-size:13px;font-weight:600">' + esc(dshort(x.date)) + '</div></div></div>').join('')
+      (pays.length ? pays.map((x) => '<div class="payrow"><span class="ic">' + ic(x.mode === 'cash' ? 'wallet' : 'qr', 'sm') + '</span><div class="grow"><b>' + rupees(x.amt) + '</b> <span class="tag pri">' + esc(t(x.mode)) + '</span>' + (x.online ? ' <span class="tag ok">' + esc(t('paidOnline')) + '</span>' : '') + '<div class="muted" style="font-size:13px;font-weight:600">' + esc(dshort(x.date)) + '</div></div></div>').join('')
         : '<div class="muted" style="font-weight:600">' + esc(t('noPayments')) + '</div>') + '</div></div>' +
       '<div class="stack"><button class="btn line block" data-act="copylink" data-id="' + c.id + '">' + ic('link') + esc(t('custLink')) + '</button></div>';
     return html;
@@ -834,7 +834,8 @@
       '<div class="duo"><div class="card"><div class="k">' + esc(t('doneK')) + '<span class="tag ok">' + ic('check', 'xs') + '</span></div><div class="v" style="color:var(--ok)">' + rupees(collected) + '</div><div class="s">' + (list.length - pendN) + ' ' + esc(t('paidUp')) + '</div></div>' +
       '<div class="card"><div class="k">' + esc(t('pendingK')) + '<span class="tag err">' + ic('clock', 'xs') + '</span></div><div class="v" style="color:var(--err)">' + rupees(pending) + '</div><div class="s">' + pendN + ' ' + esc(t('accountsDue')) + '</div></div></div>' +
       '<div class="sectionh"><h2>' + esc(t('billingOps')) + '</h2></div><div class="ops">' +
-      '<button class="op pri" data-act="duesheet">' + ic('chat') + '<span>' + esc(t('sendDues')) + '<small>' + rows.length + ' ' + esc(t('payLinks')) + '</small></span></button>' +
+      '<a class="op pri" href="#/bills">' + ic('receipt') + '<span>' + esc(t('monthBills')) + '<small>' + esc(monthLabel(billsYm())) + '</small></span></a>' +
+      '<button class="op" data-act="duesheet">' + ic('chat') + '<span>' + esc(t('sendDues')) + '<small>' + rows.length + ' ' + esc(t('payLinks')) + '</small></span></button>' +
       '<div class="op">' + ic('wallet') + '<span>' + rupees(got) + ' ' + esc(t('collectedToday')) + '<small>' + rupees(cash) + ' ' + esc(t('cash')) + ' · ' + rupees(got - cash) + ' UPI</small></span></div>' +
       '<a class="op" href="#/stock">' + ic('can') + '<span>' + esc(t('stock')) + '<small>' + esc(t('stockSub')) + '</small></span></a></div>';
 
@@ -913,6 +914,18 @@
 
   const startPin = () => (hasGeo(S.vendor) && S.vendor.geo.q === 'gps' ? geoNote(S.vendor) + '<button type="button" class="linkbtn" data-act="unpinstart">' + esc(t('removePin')) + '</button>'
     : '<button type="button" class="btn soft" data-act="gpsstart">' + ic('target', 'sm') + esc(t('useGps')) + '</button>');
+  // Online payments: the vendor's own Razorpay keys live only on the server; the app only learns the key id.
+  const rzp = { keyId: undefined, busy: false };
+  function payCard() {
+    if (!acct) return '';
+    if (rzp.keyId === undefined) { rzp.keyId = null; api('GET', null, 'api/payments').then((r) => { if (r.status === 200) { rzp.keyId = r.data.keyId; render(); } }).catch(() => {}); }
+    const head = '<div class="card"><div class="ctitle">' + ic('qr') + '<h2 class="grow">' + esc(t('onlinePay')) + '</h2>' + (rzp.keyId ? '<span class="tag ok">' + esc(t('connected')) + '</span>' : '') + '</div>' +
+      '<div class="muted" style="font-size:14px;font-weight:600;margin-bottom:10px">' + esc(t('rzpNote')) + '</div>';
+    if (rzp.keyId) return head + '<div style="font-weight:700;word-break:break-all">' + esc(rzp.keyId) + '</div><div class="stack"><button class="btn soft block" data-act="rzpoff">' + esc(t('disconnect')) + '</button></div></div>';
+    return head + '<div class="field"><label for="z-id">' + esc(t('keyId')) + '</label><div class="inp">' + ic('lock', 'sm') + '<input id="z-id" autocapitalize="off" autocomplete="off" placeholder="rzp_live_…"></div></div>' +
+      '<div class="field"><label for="z-secret">' + esc(t('keySecret')) + '</label><div class="inp">' + ic('lock', 'sm') + '<input id="z-secret" type="password" autocomplete="off"></div></div>' +
+      '<div class="stack"><button class="btn block" data-act="rzpon"' + (rzp.busy ? ' disabled' : '') + '>' + ic('check') + esc(t('connect')) + '</button></div></div>';
+  }
   function viewSettings() {
     const v = S.vendor;
     const fld = (icon, fid, lab, val, attrs) => '<div class="field"><label for="' + fid + '">' + esc(lab) + '</label><div class="inp">' + ic(icon, 'sm') + '<input id="' + fid + '" value="' + esc(val) + '" ' + (attrs || '') + '></div></div>';
@@ -924,7 +937,7 @@
       fld('qr', 's-upi', t('upiId'), v.upi, 'autocapitalize="off"') + fld('alert', 's-limit', t('limit'), v.limit, 'type="number" inputmode="numeric"') + '</div>' +
       '<div class="card"><div class="ctitle">' + ic('home') + '<h2 class="grow">' + esc(t('startAddr')) + '<small>' + esc(other('startAddr')) + '</small></h2></div>' +
       fld('pin', 's-addr', t('address'), v.addr || '', 'autocomplete="street-address" placeholder="' + esc(t('startAddrPh')) + '"') +
-      '<div class="pinrow" id="s-geo">' + startPin() + '</div></div><div class="card">' +
+      '<div class="pinrow" id="s-geo">' + startPin() + '</div></div>' + payCard() + '<div class="card">' +
       '<div class="field"><span class="lab">' + esc(t('language')) + '</span><div class="seg"><button type="button" class="' + (v.lang === 'en' ? 'on' : '') + '" data-act="setlang" data-val="en">English</button><button type="button" class="' + (v.lang === 'hi' ? 'on' : '') + '" data-act="setlang" data-val="hi">हिंदी</button><button type="button" class="' + (v.lang === 'te' ? 'on' : '') + '" data-act="setlang" data-val="te">తెలుగు</button></div></div></div>' +
       '<div class="card"><div class="ctitle">' + ic('can') + '<h2 class="grow">' + esc(t('items')) + '</h2><button class="iconbtn round" data-act="addprod" aria-label="' + esc(t('addItem')) + '">' + ic('plus') + '</button></div>' +
       S.products.map((p) => '<div class="prodedit"><input data-prod="' + p.id + '" data-k="name" value="' + esc(p.name) + '" aria-label="' + esc(t('product')) + '">' +
@@ -968,6 +981,40 @@
 
   const viewNotFound = () => '<div class="empty" style="padding-top:80px">Not found.<div class="stack"><a class="btn block" href="#/home">' + esc(t('back')) + '</a></div></div>';
 
+  // ---------- month-end bills (#/bills) ----------
+  // One list for the month: tap "Send next" and WhatsApp opens with the next customer's bill; the list remembers who got one.
+  const billsYm = () => ui.billsYm || (+todayStr().slice(8) <= 10 ? shiftMonth(monthOf(todayStr()), -1) : monthOf(todayStr()));
+  const sentOn = (ym, c) => ((S.sent || {})[ym] || {})[c.id];
+  function billRows(ym) {
+    return sortRoute(active()).map((c) => ({ c, b: monthBill(c, ym) })).filter((x) => ui.billsAll || x.b.due > 0.5);
+  }
+  function viewBills() {
+    const ym = billsYm();
+    const rows = billRows(ym);
+    const sent = rows.filter((x) => sentOn(ym, x.c)).length;
+    // Without a saved number, WhatsApp asks which chat to send it to.
+    const next = rows.find((x) => !sentOn(ym, x.c));
+    let html = pageHead(t('monthBills'), other('monthBills'), '#/money') +
+      '<div class="card"><div class="monthnav"><button class="iconbtn round" data-act="billsmonth" data-n="-1" aria-label="Previous month">' + ic('back') + '</button><div class="t"><b>' + esc(monthLabel(ym)) + '</b><span>' + esc(fill('sentN', { s: sent, n: rows.length })) + '</span></div>' +
+      '<button class="iconbtn round" data-act="billsmonth" data-n="1" aria-label="Next month">' + ic('next') + '</button></div>' +
+      '<div class="pbar" style="margin-top:12px"><span style="width:' + (rows.length ? Math.round(100 * sent / rows.length) : 0) + '%"></span></div>' +
+      '<div class="chips" style="margin-top:12px"><button class="chip' + (ui.billsAll ? '' : ' on') + '" data-act="billsall" data-val="">' + esc(t('onlyOwe')) + '</button><button class="chip' + (ui.billsAll ? ' on' : '') + '" data-act="billsall" data-val="1">' + esc(t('all')) + '</button></div>' +
+      (next ? '<div class="stack"><button class="btn big block" data-act="sendbill" data-id="' + next.c.id + '">' + ic('chat') + esc(t('sendNext') + ': ' + next.c.name + ' · ' + rupees(Math.max(0, next.b.due))) + '</button></div>'
+        : '<div class="stack"><div class="tag ok" style="justify-content:center;padding:12px;font-size:15px">' + ic('check', 'xs') + esc(rows.length ? t('allSent') : t('nobodyOwes')) + '</div></div>') + '</div>';
+    html += '<div class="log">' + rows.map(({ c, b }) => {
+      const on = sentOn(ym, c);
+      return '<div class="payrow card" style="margin:0 0 10px"><span class="av">' + esc(initials(c.name)) + '</span><div class="grow"><b>' + esc(c.name) + '</b><div class="muted" style="font-size:13px;font-weight:600">' + esc([c.flat, rupees(Math.max(0, b.due))].filter(Boolean).join(' · ')) + '</div>' +
+        (on ? '<span class="tag ok">' + ic('check', 'xs') + esc(t('sentOn') + ' ' + dshort(on)) + '</span>' : !c.phone ? '<span class="tag">' + esc(t('noPhone')) + '</span>' : '') + '</div>' +
+        '<button class="btn ' + (on ? 'soft' : 'lav') + '" style="min-height:44px" data-act="sendbill" data-id="' + c.id + '">' + ic('chat', 'sm') + esc(t('sendW')) + '</button></div>';
+    }).join('') + '</div>';
+    return html;
+  }
+  function markSent(c, ym) {
+    S.sent = S.sent || {};
+    (S.sent[ym] = S.sent[ym] || {})[c.id] = todayStr();
+    save();
+  }
+
   // ---------- live customer page (#/p/<link code>) ----------
   // The server sends just this customer's part of the vendor's khata, in the same shape, and the page draws it
   // with the same rules as the vendor's app. Customers can ask for a pause or extra; the vendor approves it.
@@ -989,7 +1036,7 @@
       else if (!r.ok) throw new Error('page ' + r.status);
       else {
         const d = await r.json();
-        setPub(d.ledger, d.requests); pub.err = '';
+        setPub(d.ledger, d.requests); pub.err = ''; pub.payOnline = !!d.payOnline;
         lsSet('lw.pub.' + token, { ledger: d.ledger, requests: d.requests });
       }
     } catch (e) {
@@ -1006,6 +1053,7 @@
     pub.data.customers.forEach(lines);
   }
   function reqLine(kind, d, c) {
+    if (kind === 'paid') return fill('paidReq', { a: rupees(d.amt) }) + (d.ref ? ' · ' + d.ref : '');
     if (kind === 'pause') return fill('pauseReq', { from: dshort(d.from), to: dshort(d.to) });
     const it = c ? lineOf(c, d.item) : null;
     const p = it ? prod(it.productId) : { name: '', unit: '' };
@@ -1013,6 +1061,7 @@
   }
   const REQTAG = { pending: ['amber', 'reqWaiting'], approved: ['ok', 'reqApproved'], declined: ['err', 'reqDeclined'] };
   function viewLive(token) {
+    token = token.split('?')[0]; // Razorpay adds ?razorpay_... when it sends the customer back
     if (pub.token !== token) { pub.token = token; pub.data = null; pub.err = ''; pub.ym = ''; loadPub(token); }
     if (!pub.data) {
       if (pub.busy || !pub.err) return viewSplash();
@@ -1043,7 +1092,9 @@
         '<div class="hero"><div class="lab">' + esc(t('toPay')) + ' · ' + esc(monthLabel(nowYm)) + '</div><div class="big">' + rupees(Math.max(0, b.due)) + (b.due < -0.5 ? '<small>' + esc(rupees(-b.due) + ' ' + t('advance')) + '</small>' : '') + '</div>' +
         '<div class="brk">' + b.lines.map((x) => '<div><span>' + esc((ls.length > 1 ? x.p.name + ' · ' : '') + fq(x.qty) + ' ' + x.p.unit + ' × ₹' + fq(x.rate)) + '</span><b>' + rupees(x.amount) + '</b></div>').join('') +
         '<div><span>' + esc(t('oldDueShort')) + '</span><b>' + (b.old < 0 ? '− ' + rupees(-b.old) : rupees(b.old)) + '</b></div><div><span>' + esc(t('paid')) + '</span><b>− ' + rupees(b.paid) + '</b></div></div>' +
-        (upi ? '<div class="stack"><a class="btn white" href="' + esc(upi) + '">' + ic('qr') + esc(t('payUpi')) + ' ' + rupees(b.due) + '</a></div>' : '') + '</div>';
+        (b.due > 0.5 && pub.payOnline ? '<div class="stack"><button class="btn white" data-act="pubpay" data-amt="' + Math.round(b.due) + '">' + ic('wallet') + esc(fill('payNow', { a: rupees(b.due) })) + '</button></div>' : '') +
+        (upi ? '<div class="stack"><a class="btn ' + (pub.payOnline ? 'lav' : 'white') + '" href="' + esc(upi) + '">' + ic('qr') + esc(t('payUpi')) + ' ' + rupees(b.due) + '</a></div>' : '') +
+        (b.due > 0.5 ? '<div class="stack"><button class="linkbtn" style="color:inherit" data-act="pubpaid">' + esc(t('iPaid')) + '</button></div>' : '') + '</div>';
       html += '<div class="card"><div class="ctitle"><h2 class="grow">' + esc(t('requestsT')) + '</h2></div>' +
         '<div class="btns"><button class="btn line" data-act="pubpause">' + ic('pause', 'sm') + esc(t('askPause')) + '</button><button class="btn line" data-act="pubextra">' + ic('plus', 'sm') + esc(t('askExtra')) + '</button></div>' +
         (pub.reqs.length ? '<div class="log" style="margin-top:12px">' + pub.reqs.map((r) => '<div class="payrow"><div class="grow"><b>' + esc(reqLine(r.kind, r.data, c)) + '</b><div class="muted" style="font-size:13px;font-weight:600">' + esc(dshort(String(r.created_at).slice(0, 10))) + '</div></div><span class="tag ' + REQTAG[r.status][0] + '">' + esc(t(REQTAG[r.status][1])) + '</span></div>').join('') + '</div>' : '') + '</div>';
@@ -1059,7 +1110,11 @@
       const c = S.customers[0], tm = addDays(todayStr(), 1);
       const ls = lines(c);
       let body;
-      if (kind === 'pause') {
+      if (kind === 'paid') {
+        const due = Math.max(0, Math.round(monthBill(c, monthOf(todayStr())).due));
+        body = '<div class="field"><label for="q-amt">' + esc(t('amountPaid')) + '</label><div class="inp">' + ic('rupee', 'sm') + '<input type="number" id="q-amt" inputmode="numeric" min="1" value="' + (due || '') + '"></div></div>' +
+          '<div class="field"><label for="q-ref">' + esc(t('utr')) + '</label><div class="inp"><input id="q-ref" inputmode="numeric" maxlength="40" autocomplete="off"></div></div>';
+      } else if (kind === 'pause') {
         body = '<div class="row" style="gap:10px;margin-top:6px"><div class="field grow"><label for="q-from">' + esc(t('from')) + '</label><div class="inp"><input type="date" id="q-from" min="' + todayStr() + '" value="' + tm + '"></div></div>' +
           '<div class="field grow"><label for="q-to">' + esc(t('to')) + '</label><div class="inp"><input type="date" id="q-to" min="' + todayStr() + '" value="' + addDays(tm, 4) + '"></div></div></div>';
       } else {
@@ -1067,15 +1122,26 @@
           (ls.length > 1 ? '<div class="field"><label for="q-item">' + esc(t('product')) + '</label><div class="inp"><select id="q-item">' + ls.map((it) => '<option value="' + esc(it.id) + '">' + esc(prod(it.productId).name) + '</option>').join('') + '</select></div></div>' : '') +
           '<div class="field"><label for="q-qty">' + esc(t('amountOf')) + ' (' + esc(prod(ls[0].productId).unit) + ')</label><div class="inp"><input type="number" id="q-qty" inputmode="decimal" min="0.5" step="0.5" value="1"></div></div>';
       }
-      sheet(sheetHead(t(kind === 'pause' ? 'askPause' : 'askExtra')) + body +
+      sheet(sheetHead(t({ pause: 'askPause', extra: 'askExtra', paid: 'iPaid' }[kind])) + body +
         '<div class="field"><label for="q-note">' + esc(t('noteOpt')) + '</label><div class="inp"><input id="q-note" maxlength="200"></div></div>' +
         '<div class="stack"><button class="btn big block" data-act="pubsend" data-kind="' + kind + '">' + ic('check') + esc(t('sendReq')) + '</button></div>');
     });
   }
+  async function pubPay(el) {
+    el.disabled = true;
+    try {
+      const back = location.origin + location.pathname + '#/p/' + pub.token;
+      const r = await fetch('api/public/' + encodeURIComponent(pub.token) + '/pay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amt: +el.dataset.amt, back }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.url) { el.disabled = false; toast(d.error || 'Error'); return; }
+      location.href = d.url;
+    } catch (e) { el.disabled = false; withPub(() => toast(t('needNetPage'))); }
+  }
   async function pubSend(el) {
     const kind = el.dataset.kind;
     const body = { kind, note: $('#q-note').value.trim() };
-    if (kind === 'pause') { body.from = $('#q-from').value; body.to = $('#q-to').value; if (!body.from || !body.to || body.to < body.from) return; }
+    if (kind === 'paid') { body.amt = +$('#q-amt').value; body.ref = $('#q-ref').value.trim(); if (!(body.amt > 0)) return; }
+    else if (kind === 'pause') { body.from = $('#q-from').value; body.to = $('#q-to').value; if (!body.from || !body.to || body.to < body.from) return; }
     else { body.day = $('#q-day').value; body.item = $('#q-item') ? $('#q-item').value : ''; body.qty = +$('#q-qty').value; if (!body.day || !(body.qty > 0)) return; }
     el.disabled = true;
     try {
@@ -1325,6 +1391,29 @@
       S.vendor.lang = LANGS[(LANGS.indexOf(S.vendor.lang) + 1) % LANGS.length]; save(); render();
     },
     pubpause() { pubSheet('pause'); },
+    pubpaid() { pubSheet('paid'); },
+    pubpay(el) { pubPay(el); },
+    billsmonth(el) { ui.billsYm = shiftMonth(billsYm(), +el.dataset.n); render(); },
+    billsall(el) { ui.billsAll = !!el.dataset.val; render(); },
+    sendbill(el, id) {
+      const c = cust(id), ym = billsYm();
+      window.open(waLink(c.phone, billText(c, ym)), '_blank', 'noopener');
+      markSent(c, ym); render();
+    },
+    async rzpon() {
+      const keyId = $('#z-id').value.trim(), keySecret = $('#z-secret').value.trim();
+      if (!keyId || !keySecret) return;
+      rzp.busy = true; render();
+      const r = await api('PUT', { keyId, keySecret }, 'api/payments').catch(() => null);
+      rzp.busy = false;
+      if (r && r.status === 200) { rzp.keyId = r.data.keyId; render(); toast(t('connected')); } else { render(); toast(t('rzpBad')); }
+    },
+    rzpoff() {
+      askThen(t('disconnect') + '?', async () => {
+        const r = await api('DELETE', null, 'api/payments').catch(() => null);
+        if (r && r.status === 200) { rzp.keyId = null; closeSheet(); render(); }
+      });
+    },
     pubextra() { pubSheet('extra'); },
     pubsend(el) { pubSend(el); },
     pubmonth(el) { const now = monthOf(todayStr()); pub.ym = shiftMonth(pub.ym || now, +el.dataset.n); render(); },
@@ -1606,7 +1695,9 @@
       const r = (remote.customers || []).find((x) => x.id === c.id);
       return !c.link && r && r.link ? Object.assign({}, c, { link: r.link }) : c;
     });
-    return { vendor: Object.assign({}, remote.vendor, local.vendor), products: byId(remote.products, local.products), customers, marks, payments: byId(remote.payments, local.payments) };
+    const sent = JSON.parse(JSON.stringify(remote.sent || {}));
+    Object.keys(local.sent || {}).forEach((m) => { sent[m] = Object.assign(sent[m] || {}, local.sent[m]); });
+    return { vendor: Object.assign({}, remote.vendor, local.vendor), products: byId(remote.products, local.products), customers, marks, payments: byId(remote.payments, local.payments), sent };
   }
   function setSync(st) {
     sync.state = st;
@@ -1688,7 +1779,8 @@
     const c = cust(r.customer_id);
     if (yes && c) {
       const d = r.data;
-      if (r.kind === 'pause') { c.pauses = c.pauses || []; c.pauses.push({ from: d.from, to: d.to }); }
+      if (r.kind === 'paid') S.payments.push({ id: 'req' + r.id, cid: c.id, date: d.day || todayStr(), amt: +d.amt, mode: 'upi', ref: d.ref || '' });
+      else if (r.kind === 'pause') { c.pauses = c.pauses || []; c.pauses.push({ from: d.from, to: d.to }); }
       else {
         const it = lineOf(c, d.item); const key = lkey(c, it);
         const m = (S.marks[d.day] || {})[key];
@@ -1864,6 +1956,7 @@
     else if (r === 'stock') html = viewStock();
     else if (r === 'settings') html = viewSettings();
     else if (r === 'order') html = viewOrder();
+    else if (r === 'bills') html = viewBills();
     else html = viewRoute();
     const tabbed = r !== 's' && r !== 'p' && auth.ready && !auth.loading && (auth.mode === 'local' || !!acct) && !!S.vendor.name && (isRoute(r) || ['customers', 'money', 'stock'].includes(r) || (r === 'edit' && a === 'new'));
     const cur = isRoute(r) ? 'home' : r === 'edit' ? 'edit/new' : r;

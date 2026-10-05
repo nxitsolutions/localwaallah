@@ -70,7 +70,22 @@ CREATE TABLE IF NOT EXISTS requests (
   decided_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS requests_uid ON requests (uid, status);
-CREATE INDEX IF NOT EXISTS requests_customer ON requests (uid, customer_id, created_at);`;
+CREATE INDEX IF NOT EXISTS requests_customer ON requests (uid, customer_id, created_at);
+-- A vendor's own Razorpay keys, for payments that record themselves. The secret is never sent back out.
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS rzp_key_id text;
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS rzp_key_secret text;
+-- Razorpay payment links made from customer pages, checked until they are paid or expire.
+CREATE TABLE IF NOT EXISTS payment_links (
+  id text PRIMARY KEY,
+  uid text NOT NULL REFERENCES vendors(uid) ON DELETE CASCADE,
+  customer_id text NOT NULL,
+  amount integer NOT NULL,
+  status text NOT NULL DEFAULT 'created',
+  payment_id text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  checked_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS payment_links_open ON payment_links (status, created_at);`;
 
 async function who(req) {
   const h = req.get('authorization') || '';
@@ -203,9 +218,13 @@ const publicRoute = (fn) => async (req, res) => {
   }
 };
 
-app.get('/api/public/:token', publicRoute(async (req, res, { uid, data, c }) => {
+app.get('/api/public/:token', publicRoute(async (req, res, found) => {
+  const { uid, c } = found;
+  // A customer coming back from Razorpay: record the payment before showing the page.
+  if (await checkLinks('uid = $1 AND customer_id = $2', [uid, c.id])) Object.assign(found, await findLink(req.params.token));
   const r = await pool.query(PUBLIC_REQUESTS, [uid, c.id]);
-  res.json({ ledger: customerSlice(data, c), requests: r.rows });
+  const v = await pool.query('SELECT rzp_key_id FROM vendors WHERE uid = $1', [uid]);
+  res.json({ ledger: customerSlice(found.data, found.c), requests: r.rows, payOnline: !!(v.rows[0] && v.rows[0].rzp_key_id) });
 }));
 
 // A few requests an hour per link is plenty; this stops a leaked link from flooding the vendor.
@@ -234,6 +253,10 @@ app.post('/api/public/:token/requests', publicRoute(async (req, res, { uid, c })
     const qty = Math.round(+b.qty * 100) / 100;
     if (!okDay(b.day) || !(qty > 0 && qty <= 50)) return res.status(400).json({ error: 'Pick a valid day and quantity' });
     data = { day: b.day, item: it.id, qty, note };
+  } else if (b.kind === 'paid') {
+    const amt = Math.round(+b.amt);
+    if (!(amt >= 1 && amt <= 100000)) return res.status(400).json({ error: 'Enter the amount paid' });
+    data = { amt, ref: String(b.ref || '').replace(/[^A-Za-z0-9 -]/g, '').slice(0, 40), day: today, note };
   } else {
     return res.status(400).json({ error: 'Unknown request' });
   }
@@ -245,9 +268,115 @@ app.post('/api/public/:token/requests', publicRoute(async (req, res, { uid, c })
   res.json({ requests: r.rows });
 }));
 
+// ---------- online payments (the vendor's own Razorpay account) ----------
+// The customer pays through a Razorpay payment link. This server checks the link until it is paid, then adds the
+// payment to the vendor's khata itself, so it shows as paid on every phone without anyone typing it in.
+const RZP = env.RAZORPAY_API || 'https://api.razorpay.com/v1';
+async function rzp(keyId, secret, method, path, body) {
+  const ctl = new AbortController();
+  const stop = setTimeout(() => ctl.abort(), 15000);
+  try {
+    const r = await fetch(RZP + path, {
+      method, signal: ctl.signal,
+      headers: { Authorization: 'Basic ' + Buffer.from(keyId + ':' + secret).toString('base64'), 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    return { status: r.status, data: await r.json().catch(() => ({})) };
+  } finally { clearTimeout(stop); }
+}
+const istDay = (ms) => new Date(ms + 330 * 60e3).toISOString().slice(0, 10);
+
+// Adds a paid link's payment to the khata once (the payment id is the record's id, so a repeat check changes nothing).
+async function recordPaid(link, paymentId, paidAtMs) {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const r = await db.query('SELECT data FROM ledgers WHERE uid = $1 FOR UPDATE', [link.uid]);
+    if (r.rows[0]) {
+      const data = r.rows[0].data;
+      data.payments = data.payments || [];
+      const id = 'rzp_' + paymentId;
+      if (!data.payments.some((p) => p.id === id)) {
+        data.payments.push({ id, cid: link.customer_id, date: istDay(paidAtMs), amt: link.amount, mode: 'upi', ref: paymentId, online: true });
+        await db.query('UPDATE ledgers SET data = $2, version = version + 1, updated_at = now() WHERE uid = $1', [link.uid, data]);
+      }
+    }
+    await db.query("UPDATE payment_links SET status = 'paid', payment_id = $2, checked_at = now() WHERE id = $1", [link.id, paymentId]);
+    await db.query('COMMIT');
+  } catch (e) {
+    await db.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally { db.release(); }
+}
+// Asks Razorpay about open links matching the filter; returns true when any got paid.
+async function checkLinks(where, args) {
+  const r = await pool.query(
+    `SELECT l.id, l.uid, l.customer_id, l.amount, v.rzp_key_id, v.rzp_key_secret FROM payment_links l JOIN vendors v ON v.uid = l.uid
+     WHERE l.status = 'created' AND l.created_at > now() - interval '3 days' AND v.rzp_key_id IS NOT NULL AND ${where.replace(/\b(uid|customer_id)\b/g, 'l.$1')}`, args);
+  let paid = false;
+  for (const l of r.rows) {
+    try {
+      const x = await rzp(l.rzp_key_id, l.rzp_key_secret, 'GET', '/payment_links/' + encodeURIComponent(l.id));
+      if (x.status !== 200) continue;
+      const pay = (x.data.payments || []).find((p) => p.status === 'captured') || (x.data.status === 'paid' ? (x.data.payments || [])[0] : null);
+      if (pay) { await recordPaid(l, pay.payment_id, (pay.created_at || Date.now() / 1000) * 1000); paid = true; }
+      else if (['cancelled', 'expired'].includes(x.data.status)) await pool.query('UPDATE payment_links SET status = $2, checked_at = now() WHERE id = $1', [l.id, x.data.status]);
+      else await pool.query('UPDATE payment_links SET checked_at = now() WHERE id = $1', [l.id]);
+    } catch (e) { console.error('payment check', l.id, e.message); }
+  }
+  return paid;
+}
+// Customers who pay and close the page without coming back still get recorded.
+setInterval(() => { checkLinks('TRUE', []).catch((e) => console.error('payment check', e.message)); }, 5 * 60e3);
+
+app.post('/api/public/:token/pay', publicRoute(async (req, res, { uid, data, c }) => {
+  const v = (await pool.query('SELECT rzp_key_id, rzp_key_secret FROM vendors WHERE uid = $1', [uid])).rows[0];
+  if (!v || !v.rzp_key_id) return res.status(400).json({ error: 'Online payment is not set up' });
+  const amt = Math.round(+(req.body || {}).amt);
+  if (!(amt >= 1 && amt <= 100000)) return res.status(400).json({ error: 'Enter the amount to pay' });
+  if (tooMany(req.params.token)) return res.status(429).json({ error: 'Too many tries. Try again later.' });
+  const back = String((req.body || {}).back || '');
+  const x = await rzp(v.rzp_key_id, v.rzp_key_secret, 'POST', '/payment_links', {
+    amount: amt * 100, currency: 'INR', accept_partial: false,
+    description: String((data.vendor || {}).name || 'LocalWaala').slice(0, 60) + ' · ' + String(c.name || '').slice(0, 40),
+    reference_id: ('lw' + Date.now().toString(36) + c.id).slice(0, 40),
+    notify: { sms: false, email: false }, reminder_enable: false,
+    expire_by: Math.floor(Date.now() / 1000) + 2 * 86400,
+    notes: { localwaala_customer: c.id },
+    // Bring the customer back to their page, which records the payment straight away.
+    ...(/^https:\/\/[^\s"'<>]+#\/p\/[A-Za-z0-9_-]+$/.test(back) ? { callback_url: back, callback_method: 'get' } : {})
+  });
+  if (x.status !== 200 || !x.data.id) {
+    console.error('payment link', x.status, x.data && x.data.error);
+    return res.status(502).json({ error: 'Could not start the payment. Try again or pay by UPI.' });
+  }
+  await pool.query('INSERT INTO payment_links (id, uid, customer_id, amount) VALUES ($1, $2, $3, $4)', [x.data.id, uid, c.id, amt]);
+  res.json({ url: x.data.short_url });
+}));
+
+// The vendor connects or disconnects their Razorpay keys. The keys are checked with Razorpay before saving.
+app.get('/api/payments', authed(async (req, res, u) => {
+  res.set('Cache-Control', 'no-store');
+  const v = (await pool.query('SELECT rzp_key_id FROM vendors WHERE uid = $1', [u.uid])).rows[0];
+  res.json({ keyId: v && v.rzp_key_id ? v.rzp_key_id : null });
+}));
+app.put('/api/payments', authed(async (req, res, u) => {
+  const keyId = String((req.body || {}).keyId || '').trim(), secret = String((req.body || {}).keySecret || '').trim();
+  if (!/^rzp_(live|test)_[A-Za-z0-9]{6,40}$/.test(keyId) || !/^[A-Za-z0-9]{8,64}$/.test(secret)) return res.status(400).json({ error: 'bad-keys' });
+  const x = await rzp(keyId, secret, 'GET', '/payment_links?count=1').catch(() => ({ status: 0 }));
+  if (x.status !== 200) return res.status(400).json({ error: 'bad-keys' });
+  await pool.query('UPDATE vendors SET rzp_key_id = $2, rzp_key_secret = $3 WHERE uid = $1', [u.uid, keyId, secret]);
+  res.json({ keyId });
+}));
+app.delete('/api/payments', authed(async (req, res, u) => {
+  await pool.query('UPDATE vendors SET rzp_key_id = NULL, rzp_key_secret = NULL WHERE uid = $1', [u.uid]);
+  res.json({ keyId: null });
+}));
+
 // The vendor's side: requests waiting for an answer, and the answer.
 app.get('/api/requests', authed(async (req, res, u) => {
   res.set('Cache-Control', 'no-store');
+  await checkLinks('uid = $1', [u.uid]).catch((e) => console.error('payment check', e.message));
   const r = await pool.query("SELECT id, customer_id, kind, data, created_at FROM requests WHERE uid = $1 AND status = 'pending' ORDER BY created_at", [u.uid]);
   res.json({ requests: r.rows });
 }));

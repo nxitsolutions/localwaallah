@@ -54,7 +54,13 @@ window.STRINGS = {
     extraReq: 'Extra {q} {u} {item} on {d}', noteOpt: 'Note (optional)', sendReq: 'Send request', dayW: 'Day', amountOf: 'How much',
     notReady: 'This page is not ready yet. Ask your vendor to open LocalWaala once with internet on.', offlineCopy: 'No internet. Showing the last saved copy.',
     needNetPage: 'Internet is needed for this.', msgVendor: 'Message on WhatsApp', custReqs: 'Customer requests', approve: 'Approve', decline: 'Decline',
-    reqApplied: 'Added to the khata', reqSent: 'Request sent. {v} will confirm.', comingW: 'Coming'
+    reqApplied: 'Added to the khata', reqSent: 'Request sent. {v} will confirm.', comingW: 'Coming',
+    monthBills: 'Month-end bills', sentN: '{s} of {n} sent', sendNext: 'Send next', allSent: 'All bills sent', onlyOwe: 'Only those who owe',
+    sentOn: 'Sent', noPhone: 'No phone', sendW: 'Send', iPaid: "I've already paid", amountPaid: 'Amount paid (₹)', utr: 'UPI reference (UTR), optional',
+    paidReq: 'Paid {a}', payNow: 'Pay {a} now', onlinePay: 'Online payments (Razorpay)',
+    rzpNote: 'Customers tap Pay now on their page, and the payment is marked paid by itself. Money goes to your own Razorpay account; Razorpay charges a fee per payment.',
+    keyId: 'Key ID', keySecret: 'Key secret', connect: 'Connect', disconnect: 'Disconnect', connected: 'Connected',
+    rzpBad: 'Razorpay did not accept these keys. Check them and try again.', paidOnline: 'Paid online'
   },
   hi: {
     namaste: 'नमस्ते,', houses: 'घर', saved: 'सेव', offline: 'नेटवर्क नहीं। फ़ोन में सेव है।',
@@ -110,7 +116,13 @@ window.STRINGS = {
     extraReq: '{d} को {q} {u} {item} ज़्यादा', noteOpt: 'नोट (ज़रूरी नहीं)', sendReq: 'अनुरोध भेजें', dayW: 'दिन', amountOf: 'कितना',
     notReady: 'यह पेज अभी तैयार नहीं है। अपने विक्रेता से कहें कि इंटरनेट चालू करके एक बार LocalWaala खोलें।', offlineCopy: 'इंटरनेट नहीं है। आख़िरी सेव कॉपी दिख रही है।',
     needNetPage: 'इसके लिए इंटरनेट चाहिए।', msgVendor: 'WhatsApp पर मैसेज करें', custReqs: 'ग्राहकों के अनुरोध', approve: 'मंज़ूर', decline: 'मना करें',
-    reqApplied: 'खाते में जुड़ गया', reqSent: 'अनुरोध भेजा गया। {v} पक्का करेंगे।', comingW: 'आने वाला'
+    reqApplied: 'खाते में जुड़ गया', reqSent: 'अनुरोध भेजा गया। {v} पक्का करेंगे।', comingW: 'आने वाला',
+    monthBills: 'महीने के बिल', sentN: '{n} में से {s} भेजे', sendNext: 'अगला भेजें', allSent: 'सारे बिल भेज दिए', onlyOwe: 'सिर्फ़ बाकी वाले',
+    sentOn: 'भेजा', noPhone: 'फ़ोन नहीं', sendW: 'भेजें', iPaid: 'मैंने पैसे दे दिए', amountPaid: 'कितने दिए (₹)', utr: 'UPI रेफ़रेंस (UTR), ज़रूरी नहीं',
+    paidReq: '{a} दिए', payNow: 'अभी {a} दें', onlinePay: 'ऑनलाइन पेमेंट (Razorpay)',
+    rzpNote: 'ग्राहक अपने पेज पर "अभी दें" दबाते हैं, और पेमेंट अपने आप जमा हो जाता है। पैसा आपके अपने Razorpay खाते में जाता है; Razorpay हर पेमेंट पर फ़ीस लेता है।',
+    keyId: 'Key ID', keySecret: 'Key secret', connect: 'जोड़ें', disconnect: 'हटाएँ', connected: 'जुड़ा है',
+    rzpBad: 'Razorpay ने ये keys नहीं मानीं। जाँच कर फिर कोशिश करें।', paidOnline: 'ऑनलाइन दिए'
   },
   te: {
     namaste: 'నమస్తే,', houses: 'ఇళ్లు', saved: 'సేవ్ అయింది', offline: 'సిగ్నల్ లేదు. ఫోన్‌లో సేవ్ అయింది.',
@@ -166,6 +178,12 @@ window.STRINGS = {
     extraReq: '{d} న {q} {u} {item} ఎక్కువ', noteOpt: 'నోట్ (ఐచ్ఛికం)', sendReq: 'అభ్యర్థన పంపండి', dayW: 'రోజు', amountOf: 'ఎంత',
     notReady: 'ఈ పేజీ ఇంకా సిద్ధంగా లేదు. ఇంటర్నెట్ ఆన్ చేసి ఒకసారి LocalWaala తెరవమని మీ వెండర్‌కు చెప్పండి.', offlineCopy: 'ఇంటర్నెట్ లేదు. చివరగా సేవ్ అయిన కాపీ చూపిస్తున్నాం.',
     needNetPage: 'దీనికి ఇంటర్నెట్ కావాలి.', msgVendor: 'వాట్సాప్‌లో మెసేజ్ చేయండి', custReqs: 'కస్టమర్ అభ్యర్థనలు', approve: 'ఒప్పుకోండి', decline: 'వద్దు',
-    reqApplied: 'ఖాతాలో చేర్చాం', reqSent: 'అభ్యర్థన పంపాం. {v} ధృవీకరిస్తారు.', comingW: 'రాబోతోంది'
+    reqApplied: 'ఖాతాలో చేర్చాం', reqSent: 'అభ్యర్థన పంపాం. {v} ధృవీకరిస్తారు.', comingW: 'రాబోతోంది',
+    monthBills: 'నెలాఖరు బిల్లులు', sentN: '{n} లో {s} పంపారు', sendNext: 'తర్వాతది పంపండి', allSent: 'అన్ని బిల్లులు పంపారు', onlyOwe: 'బాకీ ఉన్నవారు మాత్రమే',
+    sentOn: 'పంపారు', noPhone: 'ఫోన్ లేదు', sendW: 'పంపండి', iPaid: 'నేను ఇప్పటికే కట్టాను', amountPaid: 'కట్టిన మొత్తం (₹)', utr: 'UPI రిఫరెన్స్ (UTR), ఐచ్ఛికం',
+    paidReq: '{a} కట్టారు', payNow: 'ఇప్పుడు {a} కట్టండి', onlinePay: 'ఆన్‌లైన్ చెల్లింపులు (Razorpay)',
+    rzpNote: 'కస్టమర్లు తమ పేజీలో "ఇప్పుడు కట్టండి" నొక్కుతారు, చెల్లింపు దానంతట అదే నమోదవుతుంది. డబ్బు మీ సొంత Razorpay ఖాతాకు వెళ్తుంది; ప్రతి చెల్లింపుకు Razorpay ఫీజు తీసుకుంటుంది.',
+    keyId: 'Key ID', keySecret: 'Key secret', connect: 'కనెక్ట్ చేయండి', disconnect: 'తీసేయండి', connected: 'కనెక్ట్ అయింది',
+    rzpBad: 'Razorpay ఈ keys ఒప్పుకోలేదు. సరిచూసి మళ్లీ ప్రయత్నించండి.', paidOnline: 'ఆన్‌లైన్‌లో కట్టారు'
   }
 };
