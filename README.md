@@ -9,6 +9,8 @@ It is built for people who may not read much, so it uses large text, icons, fixe
 - **Customers**: every day, alternate days, chosen weekdays, or "when they call". Away dates pause delivery.
 - **Monthly bill**: a calendar of colored dots (green given, blue extra, amber half, red skipped, grey away), old due, payments and amount to pay. Sent on WhatsApp with a customer link.
 - **Customer page**: a live page per customer with today's and tomorrow's delivery, the month calendar, the bill and a Pay by UPI button, with no app install. Customers can ask for a pause or extra, and the vendor approves it on the Route screen. Without the server, the link carries a snapshot of the bill instead.
+- **Payments**: customers can pay online through the vendor's own Razorpay account and the payment records itself, or tap "I've already paid" for the vendor to approve.
+- **Month-end bills**: one list per month with a "Send next" button that opens WhatsApp with each customer's bill in turn and remembers who got one.
 - **Collect money**: cash, UPI, cheque or bank payments on a big keypad, dues list with an over-limit warning, and today's cash in hand.
 - **Morning stock**: total litres for today or tomorrow shown as 40 L cans, read aloud, and sent to the dairy on WhatsApp.
 - **Several items per customer**: a house can take milk daily, paneer on weekends and curd when they call, each with its own quantity, days and rate.
