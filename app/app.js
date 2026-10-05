@@ -39,7 +39,8 @@
 
   const L = () => window.STRINGS[S.vendor.lang] || window.STRINGS.en;
   const t = (k) => L()[k] || window.STRINGS.en[k] || k;
-  const locale = () => (S.vendor.lang === 'hi' ? 'hi-IN' : 'en-IN');
+  const LANGS = ['en', 'hi', 'te'];
+  const locale = () => ({ hi: 'hi-IN', te: 'te-IN' })[S.vendor.lang] || 'en-IN';
 
   // ---------- icons (stroke SVG) ----------
   const P = {
@@ -206,12 +207,12 @@
   const MARK = '<span class="logo"><img src="logo-mark.webp" alt="LocalWaala"></span>';
   // Big logo with the wordmark, for the welcome, sign-in and loading screens.
   const brand = (hi, sub) => '<div class="brand"><img src="logo.webp" alt="LocalWaala" width="220" height="203">' + (hi ? '<b>' + esc(hi) + '</b>' : '') + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div>';
-  const other = (k) => (window.STRINGS[S.vendor.lang === 'hi' ? 'en' : 'hi'] || {})[k] || '';
+  const other = (k) => (window.STRINGS[S.vendor.lang === 'en' ? 'hi' : 'en'] || {})[k] || '';
   const bi = (k) => esc(t(k)) + '<small>' + esc(other(k)) + '</small>';
   const fill = (k, o) => t(k).replace(/\{(\w+)\}/g, (_, x) => o[x]);
   const dshort = (day) => parse(day).toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
   const initials = (n) => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
-  const langBtn = () => '<button class="iconbtn" data-act="lang" aria-label="Change language">' + (S.vendor.lang === 'hi' ? 'A' : 'अ') + '</button>';
+  const langBtn = () => '<button class="iconbtn" data-act="lang" aria-label="Change language">' + (({ en: 'अ', hi: 'త' })[S.vendor.lang] || 'A') + '</button>';
   function live() {
     if (!navigator.onLine || !saveOk) return '<span class="live off">' + esc(t('offlineShort')) + '</span>';
     if (acct && sync.state === 'busy') return '<span class="live busy">' + esc(t('syncing')) + '</span>';
@@ -258,7 +259,7 @@
     return h;
   }
   const rowKind = (i) => (i.pending ? 'pending' : i.st === 'skip' || i.st === 'away' ? 'skip' : i.st === 'none' ? 'call' : 'done');
-  const WD = () => (S.vendor.lang === 'hi' ? ['र', 'सो', 'मं', 'बु', 'गु', 'शु', 'श'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S']);
+  const WD = () => ({ hi: ['र', 'सो', 'मं', 'बु', 'गु', 'शु', 'श'], te: ['ఆ', 'సో', 'మం', 'బు', 'గు', 'శు', 'శ'] })[S.vendor.lang] || ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
   // ---------- addresses & route map ----------
   // A place is a GPS pin {lat, lng} or a typed address; Google Maps understands both.
@@ -924,7 +925,7 @@
       '<div class="card"><div class="ctitle">' + ic('home') + '<h2 class="grow">' + esc(t('startAddr')) + '<small>' + esc(other('startAddr')) + '</small></h2></div>' +
       fld('pin', 's-addr', t('address'), v.addr || '', 'autocomplete="street-address" placeholder="' + esc(t('startAddrPh')) + '"') +
       '<div class="pinrow" id="s-geo">' + startPin() + '</div></div><div class="card">' +
-      '<div class="field"><span class="lab">' + esc(t('language')) + '</span><div class="seg"><button type="button" class="' + (v.lang === 'en' ? 'on' : '') + '" data-act="setlang" data-val="en">English</button><button type="button" class="' + (v.lang === 'hi' ? 'on' : '') + '" data-act="setlang" data-val="hi">हिंदी</button></div></div></div>' +
+      '<div class="field"><span class="lab">' + esc(t('language')) + '</span><div class="seg"><button type="button" class="' + (v.lang === 'en' ? 'on' : '') + '" data-act="setlang" data-val="en">English</button><button type="button" class="' + (v.lang === 'hi' ? 'on' : '') + '" data-act="setlang" data-val="hi">हिंदी</button><button type="button" class="' + (v.lang === 'te' ? 'on' : '') + '" data-act="setlang" data-val="te">తెలుగు</button></div></div></div>' +
       '<div class="card"><div class="ctitle">' + ic('can') + '<h2 class="grow">' + esc(t('items')) + '</h2><button class="iconbtn round" data-act="addprod" aria-label="' + esc(t('addItem')) + '">' + ic('plus') + '</button></div>' +
       S.products.map((p) => '<div class="prodedit"><input data-prod="' + p.id + '" data-k="name" value="' + esc(p.name) + '" aria-label="' + esc(t('product')) + '">' +
         '<input data-prod="' + p.id + '" data-k="unit" value="' + esc(p.unit) + '" aria-label="' + esc(t('unit')) + '">' +
@@ -1050,7 +1051,7 @@
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { toast(t('noVoice')); return; }
     const r = new SR();
-    r.lang = S.vendor.lang === 'hi' ? 'hi-IN' : 'en-IN';
+    r.lang = locale();
     r.interimResults = false; r.maxAlternatives = 3;
     btn.classList.add('on'); toast(t('listening'));
     r.onresult = (e) => {
@@ -1066,16 +1067,16 @@
   function applyVoice(text) {
     const r = location.hash.split('/')[1] || '';
     const day = r === '' || r === 'home' || r === 'today' ? ui.day : todayStr();
-    const raw = text.replace(/[०-९]/g, (d) => String('०१२३४५६७८९'.indexOf(d))).toLowerCase();
-    const numWords = { one: 1, two: 2, three: 3, four: 4, five: 5, ek: 1, do: 2, teen: 3, char: 4, paanch: 5, 'एक': 1, 'दो': 2, 'तीन': 3, 'चार': 4, 'पांच': 5, 'पाँच': 5 };
+    const raw = text.replace(/[०-९]/g, (d) => String('०१२३४५६७८९'.indexOf(d))).replace(/[౦-౯]/g, (d) => String('౦౧౨౩౪౫౬౭౮౯'.indexOf(d))).toLowerCase();
+    const numWords = { one: 1, two: 2, three: 3, four: 4, five: 5, ek: 1, do: 2, teen: 3, char: 4, paanch: 5, 'एक': 1, 'दो': 2, 'तीन': 3, 'चार': 4, 'पांच': 5, 'पाँच': 5, 'ఒకటి': 1, 'ఒక': 1, 'రెండు': 2, 'మూడు': 3, 'నాలుగు': 4, 'ఐదు': 5 };
     const tokens = raw.split(/[\s,.]+/).filter(Boolean);
     const c = active().find((x) => x.flat && tokens.includes(String(x.flat).toLowerCase())) ||
       active().find((x) => raw.includes(x.name.toLowerCase().split(' ')[0]));
     if (!c) return false;
     let st = 'done';
-    if (/skip|nahi|nahin|नहीं|नही|मत|band|बंद|no /.test(raw + ' ')) st = 'skip';
-    else if (/half|aadha|adha|आधा/.test(raw)) st = 'half';
-    else if (/extra|zyada|jyada|ज़्यादा|ज्यादा|और|aur|more|add/.test(raw)) st = 'extra';
+    if (/skip|nahi|nahin|नहीं|नही|मत|band|बंद|వద్దు|లేదు|no /.test(raw + ' ')) st = 'skip';
+    else if (/half|aadha|adha|आधा|సగం|అర /.test(raw + ' ')) st = 'half';
+    else if (/extra|zyada|jyada|ज़्यादा|ज्यादा|और|aur|more|add|ఎక్కువ|అదనం/.test(raw)) st = 'extra';
     const it = lines(c).find((y) => raw.includes(prod(y.productId).name.toLowerCase().split(' ')[0])) || lines(c).find((y) => lineInfo(c, y, day).st !== 'none') || lines(c)[0];
     const key = lkey(c, it);
     let x = 1;
@@ -1099,8 +1100,9 @@
     const start = monthStart(shiftMonth(monthOf(today), -2));
     const fc = { id: uid(), name: 'Full Cream', unit: 'L', rate: 68 }, tn = { id: uid(), name: 'Toned', unit: 'L', rate: 56 };
     const pn = { id: uid(), name: 'Paneer', unit: 'kg', rate: 340 }, dh = { id: uid(), name: 'Curd', unit: 'pouch', rate: 40 };
+    const lang = S.vendor.lang;
     S = blank();
-    Object.assign(S.vendor, { name: 'Ramesh Dairy', phone: '', upi: 'rameshdairy@upi', lang: S.vendor.lang || 'en', type: 'milk', limit: 5000 });
+    Object.assign(S.vendor, { name: 'Ramesh Dairy', phone: '', upi: 'rameshdairy@upi', lang: lang || 'en', type: 'milk', limit: 5000 });
     S.products = [fc, tn, pn, dh];
     const people = [
       ['301', 'Sharma ji', 'Tower B', fc, 1, 'daily'], ['302', 'Mehta family', 'Tower B', tn, 2, 'daily'], ['303', 'Iqbal bhai', 'Tower B', fc, 1, 'daily'],
@@ -1186,7 +1188,7 @@
   }
   const handlers = {
     undo() { const u = toast.undo; $('#toast').hidden = true; if (u) u(); },
-    lang() { S.vendor.lang = S.vendor.lang === 'hi' ? 'en' : 'hi'; save(); render(); },
+    lang() { S.vendor.lang = LANGS[(LANGS.indexOf(S.vendor.lang) + 1) % LANGS.length]; save(); render(); },
     setlang(el) { S.vendor.lang = el.dataset.val; save(); render(); },
     pick(el) { onlyOn(el); },
     start() {
@@ -1354,8 +1356,8 @@
       if (!window.speechSynthesis) { toast(t('noVoice')); return; }
       const day = ui.stockDay === 'tomorrow' ? addDays(todayStr(), 1) : todayStr();
       const s = stockFor(day);
-      const words = s.items.map((x) => x.p.name + ', ' + fq(x.qty) + ' ' + (x.p.unit === 'L' ? (S.vendor.lang === 'hi' ? 'लीटर' : 'litres') : x.p.unit)).join('. ');
-      const u = new SpeechSynthesisUtterance((S.vendor.lang === 'hi' ? 'आज का स्टॉक. ' : 'Stock. ') + words);
+      const words = s.items.map((x) => x.p.name + ', ' + fq(x.qty) + ' ' + (x.p.unit === 'L' ? (({ hi: 'लीटर', te: 'లీటర్లు' })[S.vendor.lang] || 'litres') : x.p.unit)).join('. ');
+      const u = new SpeechSynthesisUtterance((({ hi: 'आज का स्टॉक. ', te: 'ఈరోజు స్టాక్. ' })[S.vendor.lang] || 'Stock. ') + words);
       u.lang = locale(); speechSynthesis.cancel(); speechSynthesis.speak(u);
     },
     copytext() {
@@ -1553,7 +1555,7 @@
     // If Firebase cannot finish starting (a broken sign-in page on the server, a stuck redirect), show the
     // sign-in screen, or the khata already on this phone, instead of loading forever.
     setTimeout(() => { if (!auth.ready) { auth.ready = true; render(); } }, 10000);
-    fa.languageCode = S.vendor.lang === 'hi' ? 'hi' : 'en';
+    fa.languageCode = S.vendor.lang || 'en';
     fa.getRedirectResult().catch((e) => toast(authError(e)));
     fa.onAuthStateChanged((u) => {
       auth.ready = true;
@@ -1653,7 +1655,7 @@
   function render() {
     const h = location.hash.replace(/^#\/?/, '');
     const [route, a, b] = h.split('/');
-    document.documentElement.lang = S.vendor.lang === 'hi' ? 'hi' : 'en';
+    document.documentElement.lang = S.vendor.lang || 'en';
     let html;
     const r = route || '';
     if (r === 's') html = viewPublic(a || '');

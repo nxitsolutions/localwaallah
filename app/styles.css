@@ -8,7 +8,7 @@
   --given: #1E8A3C; --half: #E3A008; --skip: #D12C1F; --extra: #1A5BD1; --away: #6B7685;
   --r1: 8px; --r2: 12px; --r3: 16px; --r4: 24px;
   --sh: 0 1px 2px rgba(36, 40, 43, .05), 0 4px 14px rgba(36, 40, 43, .05);
-  --font: 'Plus Jakarta Sans', 'Noto Sans Devanagari', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font: 'Plus Jakarta Sans', 'Noto Sans Devanagari', 'Noto Sans Telugu', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
