@@ -8,7 +8,7 @@ It is built for people who may not read much, so it uses large text, icons, fixe
 - **Today's delivery**: every house starts as ✓ Given. One tap changes it to ½ Half, ✕ Skip or +1 Extra, with Undo. Houses are grouped by area for the route.
 - **Customers**: every day, alternate days, chosen weekdays, or "when they call". Away dates pause delivery.
 - **Monthly bill**: a calendar of colored dots (green given, blue extra, amber half, red skipped, grey away), old due, payments and amount to pay. Sent on WhatsApp with a customer link.
-- **Customer link**: opens the customer's calendar and a Pay by UPI button with no app install. All of the bill data is inside the link, so no server is needed.
+- **Customer page**: a live page per customer with today's and tomorrow's delivery, the month calendar, the bill and a Pay by UPI button, with no app install. Customers can ask for a pause or extra, and the vendor approves it on the Route screen. Without the server, the link carries a snapshot of the bill instead.
 - **Collect money**: cash, UPI, cheque or bank payments on a big keypad, dues list with an over-limit warning, and today's cash in hand.
 - **Morning stock**: total litres for today or tomorrow shown as 40 L cans, read aloud, and sent to the dairy on WhatsApp.
 - **Several items per customer**: a house can take milk daily, paneer on weekends and curd when they call, each with its own quantity, days and rate.

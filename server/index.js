@@ -55,7 +55,22 @@ CREATE TABLE IF NOT EXISTS ledgers (
   data jsonb NOT NULL,
   version integer NOT NULL,
   updated_at timestamptz NOT NULL DEFAULT now()
-);`;
+);
+-- Finds the khata that holds a customer's page link.
+CREATE INDEX IF NOT EXISTS ledgers_customers ON ledgers USING gin ((data->'customers') jsonb_path_ops);
+-- Pause and extra requests customers send from their page, waiting for the vendor's yes or no.
+CREATE TABLE IF NOT EXISTS requests (
+  id bigserial PRIMARY KEY,
+  uid text NOT NULL REFERENCES vendors(uid) ON DELETE CASCADE,
+  customer_id text NOT NULL,
+  kind text NOT NULL,
+  data jsonb NOT NULL,
+  status text NOT NULL DEFAULT 'pending',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  decided_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS requests_uid ON requests (uid, status);
+CREATE INDEX IF NOT EXISTS requests_customer ON requests (uid, customer_id, created_at);`;
 
 async function who(req) {
   const h = req.get('authorization') || '';
@@ -140,6 +155,107 @@ app.put('/api/ledger', authed(async (req, res, u) => {
   } finally {
     db.release();
   }
+}));
+
+// ---------- customer page ----------
+// Each customer has a random link code (c.link) made by the vendor's phone. Anyone holding the link sees
+// that one customer's khata and can ask for a pause or extra; nothing else in the vendor's khata is sent.
+const LINK_RE = /^[A-Za-z0-9_-]{16,40}$/;
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const PUBLIC_REQUESTS = 'SELECT id, kind, data, status, created_at FROM requests WHERE uid = $1 AND customer_id = $2 AND created_at > now() - interval \'30 days\' ORDER BY created_at DESC LIMIT 10';
+
+async function findLink(token) {
+  if (!LINK_RE.test(token || '')) return null;
+  const r = await pool.query("SELECT uid, data FROM ledgers WHERE data->'customers' @> $1::jsonb LIMIT 1", [JSON.stringify([{ link: token }])]);
+  if (!r.rows[0]) return null;
+  const { uid, data } = r.rows[0];
+  const c = (data.customers || []).find((x) => x.link === token && !x.deleted);
+  return c ? { uid, data, c } : null;
+}
+// Just this customer's share of the khata, in the same shape the app keeps, so the app can draw it with its own rules.
+function customerSlice(data, c) {
+  const items = Array.isArray(c.items) && c.items.length ? c.items : [{ id: c.id, productId: c.productId, qty: c.qty, sched: c.sched, rate: c.rate }];
+  const pids = new Set(items.map((x) => x.productId));
+  const keys = new Set(items.map((x) => (x.id === c.id ? c.id : c.id + '.' + x.id)));
+  const marks = {};
+  Object.keys(data.marks || {}).forEach((day) => {
+    const m = data.marks[day] || {};
+    Object.keys(m).forEach((k) => { if (keys.has(k)) (marks[day] = marks[day] || {})[k] = m[k]; });
+  });
+  const v = data.vendor || {};
+  return {
+    vendor: { name: v.name || '', phone: v.phone || '', upi: v.upi || '', lang: v.lang || 'en' },
+    products: (data.products || []).filter((p) => pids.has(p.id)),
+    customers: [{ id: c.id, name: c.name, flat: c.flat || '', items, pauses: c.pauses || [], start: c.start || '', opening: c.opening || 0, link: c.link }],
+    marks,
+    payments: (data.payments || []).filter((p) => p.cid === c.id)
+  };
+}
+const publicRoute = (fn) => async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const found = await findLink(req.params.token);
+    if (!found) return res.status(404).json({ error: 'Not found' });
+    await fn(req, res, found);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+app.get('/api/public/:token', publicRoute(async (req, res, { uid, data, c }) => {
+  const r = await pool.query(PUBLIC_REQUESTS, [uid, c.id]);
+  res.json({ ledger: customerSlice(data, c), requests: r.rows });
+}));
+
+// A few requests an hour per link is plenty; this stops a leaked link from flooding the vendor.
+const recent = new Map();
+function tooMany(token) {
+  const now = Date.now();
+  const list = (recent.get(token) || []).filter((x) => now - x < 3600e3);
+  list.push(now); recent.set(token, list);
+  if (recent.size > 5000) recent.clear();
+  return list.length > 10;
+}
+const addDays = (day, n) => { const d = new Date(day + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+
+app.post('/api/public/:token/requests', publicRoute(async (req, res, { uid, c }) => {
+  const b = req.body || {};
+  const today = new Date(Date.now() + 330 * 60e3).toISOString().slice(0, 10); // India time
+  const okDay = (d) => DAY_RE.test(d || '') && d >= today && d <= addDays(today, 120);
+  const note = String(b.note || '').slice(0, 200);
+  let data;
+  if (b.kind === 'pause') {
+    if (!okDay(b.from) || !okDay(b.to) || b.to < b.from || b.to > addDays(b.from, 90)) return res.status(400).json({ error: 'Pick valid dates' });
+    data = { from: b.from, to: b.to, note };
+  } else if (b.kind === 'extra') {
+    const items = Array.isArray(c.items) && c.items.length ? c.items : [{ id: c.id }];
+    const it = items.find((x) => x.id === b.item) || items[0];
+    const qty = Math.round(+b.qty * 100) / 100;
+    if (!okDay(b.day) || !(qty > 0 && qty <= 50)) return res.status(400).json({ error: 'Pick a valid day and quantity' });
+    data = { day: b.day, item: it.id, qty, note };
+  } else {
+    return res.status(400).json({ error: 'Unknown request' });
+  }
+  if (tooMany(req.params.token)) return res.status(429).json({ error: 'Too many requests. Try again later.' });
+  const open = await pool.query("SELECT count(*)::int AS n FROM requests WHERE uid = $1 AND customer_id = $2 AND status = 'pending'", [uid, c.id]);
+  if (open.rows[0].n >= 5) return res.status(429).json({ error: 'Too many requests waiting. Ask your vendor.' });
+  await pool.query('INSERT INTO requests (uid, customer_id, kind, data) VALUES ($1, $2, $3, $4)', [uid, c.id, b.kind, data]);
+  const r = await pool.query(PUBLIC_REQUESTS, [uid, c.id]);
+  res.json({ requests: r.rows });
+}));
+
+// The vendor's side: requests waiting for an answer, and the answer.
+app.get('/api/requests', authed(async (req, res, u) => {
+  res.set('Cache-Control', 'no-store');
+  const r = await pool.query("SELECT id, customer_id, kind, data, created_at FROM requests WHERE uid = $1 AND status = 'pending' ORDER BY created_at", [u.uid]);
+  res.json({ requests: r.rows });
+}));
+app.post('/api/requests/:id', authed(async (req, res, u) => {
+  const status = (req.body || {}).status;
+  if (!['approved', 'declined'].includes(status) || !/^\d{1,18}$/.test(req.params.id)) return res.status(400).json({ error: 'Bad request' });
+  await pool.query("UPDATE requests SET status = $3, decided_at = now() WHERE id = $1 AND uid = $2 AND status = 'pending'", [req.params.id, u.uid, status]);
+  res.json({ ok: true });
 }));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
