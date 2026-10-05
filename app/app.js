@@ -529,7 +529,7 @@
         const d = addDays(day, n);
         const lab = d === today ? t('today') + ', ' + dshort(d) : parse(d).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric' });
         return '<button class="daypill' + (n === 0 ? ' on' : '') + '"' + (n ? ' data-act="day" data-n="' + n + '"' : ' aria-current="date"') + '>' + esc(lab) + '</button>';
-      }).join('') + '</div>';
+      }).join('') + '</div>' + reqCard();
 
     if (!active().length) {
       return html + '<div class="card empty">' + esc(t('noCustomers')) + '<div class="stack"><a class="btn block" href="#/edit/new">' + ic('plus') + esc(t('addFirst')) + '</a>' +
@@ -968,7 +968,137 @@
 
   const viewNotFound = () => '<div class="empty" style="padding-top:80px">Not found.<div class="stack"><a class="btn block" href="#/home">' + esc(t('back')) + '</a></div></div>';
 
+  // ---------- live customer page (#/p/<link code>) ----------
+  // The server sends just this customer's part of the vendor's khata, in the same shape, and the page draws it
+  // with the same rules as the vendor's app. Customers can ask for a pause or extra; the vendor approves it.
+  const pub = { token: '', data: null, reqs: [], err: '', busy: false, ym: '', lang: '' };
+  // Runs fn with the customer's khata in place of this phone's own, then always puts this phone's khata back.
+  function withPub(fn) {
+    const own = S;
+    S = pub.data;
+    S.vendor.lang = pub.lang || pub.vlang || 'en';
+    try { return fn(); } finally { S = own; }
+  }
+  async function loadPub(token) {
+    pub.busy = true;
+    try {
+      const ctl = new AbortController();
+      setTimeout(() => ctl.abort(), 20000);
+      const r = await fetch('api/public/' + encodeURIComponent(token), { signal: ctl.signal, cache: 'no-store' });
+      if (r.status === 404) { pub.err = 'notReady'; pub.data = null; }
+      else if (!r.ok) throw new Error('page ' + r.status);
+      else {
+        const d = await r.json();
+        setPub(d.ledger, d.requests); pub.err = '';
+        lsSet('lw.pub.' + token, { ledger: d.ledger, requests: d.requests });
+      }
+    } catch (e) {
+      const kept = lsGet('lw.pub.' + token);
+      if (kept && !pub.data) setPub(kept.ledger, kept.requests);
+      pub.err = pub.data ? 'offlineCopy' : 'needNetPage';
+    }
+    pub.busy = false;
+    render();
+  }
+  function setPub(ledger, reqs) {
+    pub.data = ledger; pub.vlang = ledger.vendor.lang; pub.reqs = reqs || [];
+    pub.lang = pub.lang || lsGet('lw.plang') || '';
+    pub.data.customers.forEach(lines);
+  }
+  function reqLine(kind, d, c) {
+    if (kind === 'pause') return fill('pauseReq', { from: dshort(d.from), to: dshort(d.to) });
+    const it = c ? lineOf(c, d.item) : null;
+    const p = it ? prod(it.productId) : { name: '', unit: '' };
+    return fill('extraReq', { q: fq(d.qty), u: p.unit, item: p.name, d: dshort(d.day) });
+  }
+  const REQTAG = { pending: ['amber', 'reqWaiting'], approved: ['ok', 'reqApproved'], declined: ['err', 'reqDeclined'] };
+  function viewLive(token) {
+    if (pub.token !== token) { pub.token = token; pub.data = null; pub.err = ''; pub.ym = ''; loadPub(token); }
+    if (!pub.data) {
+      if (pub.busy || !pub.err) return viewSplash();
+      return '<div class="pub"><header class="apphead bare">' + langBtn() + '</header>' + brand() + '<div class="card empty">' + esc(t(pub.err)) + '</div></div>';
+    }
+    return withPub(() => {
+      const c = S.customers[0], v = S.vendor, today = todayStr(), tm = addDays(today, 1);
+      const nowYm = monthOf(today), firstYm = monthOf(c.start || today);
+      const ym = pub.ym && pub.ym <= nowYm && pub.ym >= firstYm ? pub.ym : nowYm;
+      const b = monthBill(c, monthOf(today));
+      const { cells, counts } = monthCells(c, ym);
+      const ls = lines(c);
+      const dayLine = (day) => {
+        const i = dayInfo(c, day);
+        if (i.st === 'away') return '<span class="tag err">' + esc(t('onVacation')) + '</span>';
+        const parts = ls.map((it) => ({ it, i: lineInfo(c, it, day) })).filter((x) => x.i.qty > 0)
+          .map((x) => fq(x.i.qty) + ' ' + prod(x.it.productId).unit + ' ' + prod(x.it.productId).name);
+        if (!parts.length) return '<span class="tag">' + esc(i.st === 'skip' ? t('skipped') : t('noDelivery')) + '</span>';
+        return '<span class="tag ' + (day > today ? 'pri' : LOGTAG[i.st] || 'ok') + '">' + esc(day > today ? t('comingW') : t(LOOK[i.st].w)) + '</span> <b>' + esc(parts.join(', ')) + '</b>';
+      };
+      const upi = v.upi && b.due > 0.5 ? 'upi://pay?pa=' + encodeURIComponent(v.upi) + '&pn=' + encodeURIComponent(v.name) + '&am=' + Math.round(b.due) + '&cu=INR&tn=' + encodeURIComponent(c.name + ' ' + monthLabel(nowYm)) : '';
+      document.title = v.name + ' · ' + c.name;
+      let html = '<div class="pub"><header class="apphead">' + MARK + '<div class="t"><b>' + esc(v.name) + '</b><span>LocalWaala · ' + esc(t('noApp')) + '</span></div>' + langBtn() + '</header>' +
+        (pub.err ? '<div class="card muted" style="font-weight:600">' + esc(t(pub.err)) + '</div>' : '') +
+        '<div class="card"><div class="profile"><span class="av big">' + esc(initials(c.name)) + '</span><div class="grow"><h2>' + esc(c.name) + '</h2><div class="sub">' + esc([c.flat, ls.map((it) => prod(it.productId).name).join(', ')].filter(Boolean).join(' · ')) + '</div></div></div>' +
+        '<div class="log" style="margin-top:12px"><div class="payrow"><div class="grow"><div class="muted" style="font-size:13px;font-weight:700">' + esc(t('today') + ', ' + dshort(today)) + '</div>' + dayLine(today) + '</div></div>' +
+        '<div class="payrow"><div class="grow"><div class="muted" style="font-size:13px;font-weight:700">' + esc(t('tomorrow') + ', ' + dshort(tm)) + '</div>' + dayLine(tm) + '</div></div></div></div>' +
+        '<div class="hero"><div class="lab">' + esc(t('toPay')) + ' · ' + esc(monthLabel(nowYm)) + '</div><div class="big">' + rupees(Math.max(0, b.due)) + (b.due < -0.5 ? '<small>' + esc(rupees(-b.due) + ' ' + t('advance')) + '</small>' : '') + '</div>' +
+        '<div class="brk">' + b.lines.map((x) => '<div><span>' + esc((ls.length > 1 ? x.p.name + ' · ' : '') + fq(x.qty) + ' ' + x.p.unit + ' × ₹' + fq(x.rate)) + '</span><b>' + rupees(x.amount) + '</b></div>').join('') +
+        '<div><span>' + esc(t('oldDueShort')) + '</span><b>' + (b.old < 0 ? '− ' + rupees(-b.old) : rupees(b.old)) + '</b></div><div><span>' + esc(t('paid')) + '</span><b>− ' + rupees(b.paid) + '</b></div></div>' +
+        (upi ? '<div class="stack"><a class="btn white" href="' + esc(upi) + '">' + ic('qr') + esc(t('payUpi')) + ' ' + rupees(b.due) + '</a></div>' : '') + '</div>';
+      html += '<div class="card"><div class="ctitle"><h2 class="grow">' + esc(t('requestsT')) + '</h2></div>' +
+        '<div class="btns"><button class="btn line" data-act="pubpause">' + ic('pause', 'sm') + esc(t('askPause')) + '</button><button class="btn line" data-act="pubextra">' + ic('plus', 'sm') + esc(t('askExtra')) + '</button></div>' +
+        (pub.reqs.length ? '<div class="log" style="margin-top:12px">' + pub.reqs.map((r) => '<div class="payrow"><div class="grow"><b>' + esc(reqLine(r.kind, r.data, c)) + '</b><div class="muted" style="font-size:13px;font-weight:600">' + esc(dshort(String(r.created_at).slice(0, 10))) + '</div></div><span class="tag ' + REQTAG[r.status][0] + '">' + esc(t(REQTAG[r.status][1])) + '</span></div>').join('') + '</div>' : '') + '</div>';
+      html += '<div class="card"><div class="monthnav">' + (ym > firstYm ? '<button class="iconbtn round" data-act="pubmonth" data-n="-1" aria-label="Previous month">' + ic('back') + '</button>' : '<span></span>') +
+        '<div class="t"><b>' + esc(monthLabel(ym)) + '</b></div>' + (ym < nowYm ? '<button class="iconbtn round" data-act="pubmonth" data-n="1" aria-label="Next month">' + ic('next') + '</button>' : '<span></span>') + '</div>' +
+        calendarHtml(cells, false) + legendHtml(counts) + '</div>' +
+        (v.phone ? '<div class="stack"><a class="btn lav block" target="_blank" rel="noopener" href="https://wa.me/' + esc(waPhone(v.phone)) + '">' + ic('chat') + esc(t('msgVendor')) + '</a></div>' : '') + '</div>';
+      return html;
+    });
+  }
+  function pubSheet(kind) {
+    withPub(() => {
+      const c = S.customers[0], tm = addDays(todayStr(), 1);
+      const ls = lines(c);
+      let body;
+      if (kind === 'pause') {
+        body = '<div class="row" style="gap:10px;margin-top:6px"><div class="field grow"><label for="q-from">' + esc(t('from')) + '</label><div class="inp"><input type="date" id="q-from" min="' + todayStr() + '" value="' + tm + '"></div></div>' +
+          '<div class="field grow"><label for="q-to">' + esc(t('to')) + '</label><div class="inp"><input type="date" id="q-to" min="' + todayStr() + '" value="' + addDays(tm, 4) + '"></div></div></div>';
+      } else {
+        body = '<div class="field"><label for="q-day">' + esc(t('dayW')) + '</label><div class="inp"><input type="date" id="q-day" min="' + todayStr() + '" value="' + tm + '"></div></div>' +
+          (ls.length > 1 ? '<div class="field"><label for="q-item">' + esc(t('product')) + '</label><div class="inp"><select id="q-item">' + ls.map((it) => '<option value="' + esc(it.id) + '">' + esc(prod(it.productId).name) + '</option>').join('') + '</select></div></div>' : '') +
+          '<div class="field"><label for="q-qty">' + esc(t('amountOf')) + ' (' + esc(prod(ls[0].productId).unit) + ')</label><div class="inp"><input type="number" id="q-qty" inputmode="decimal" min="0.5" step="0.5" value="1"></div></div>';
+      }
+      sheet(sheetHead(t(kind === 'pause' ? 'askPause' : 'askExtra')) + body +
+        '<div class="field"><label for="q-note">' + esc(t('noteOpt')) + '</label><div class="inp"><input id="q-note" maxlength="200"></div></div>' +
+        '<div class="stack"><button class="btn big block" data-act="pubsend" data-kind="' + kind + '">' + ic('check') + esc(t('sendReq')) + '</button></div>');
+    });
+  }
+  async function pubSend(el) {
+    const kind = el.dataset.kind;
+    const body = { kind, note: $('#q-note').value.trim() };
+    if (kind === 'pause') { body.from = $('#q-from').value; body.to = $('#q-to').value; if (!body.from || !body.to || body.to < body.from) return; }
+    else { body.day = $('#q-day').value; body.item = $('#q-item') ? $('#q-item').value : ''; body.qty = +$('#q-qty').value; if (!body.day || !(body.qty > 0)) return; }
+    el.disabled = true;
+    try {
+      const r = await fetch('api/public/' + encodeURIComponent(pub.token) + '/requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { el.disabled = false; toast(d.error || 'Error'); return; }
+      pub.reqs = d.requests || pub.reqs;
+      closeSheet(); render();
+      withPub(() => toast(fill('reqSent', { v: S.vendor.name })));
+    } catch (e) { el.disabled = false; withPub(() => toast(t('needNetPage'))); }
+  }
+
   // ---------- links & sharing ----------
+  // A signed-in vendor shares a live page; each customer gets a random link code the first time it is needed.
+  function custLink(c, ym) {
+    if (auth.mode !== 'server' || !acct) return publicLink(c, ym);
+    if (!c.link) {
+      const a = new Uint8Array(12); crypto.getRandomValues(a);
+      c.link = btoa(String.fromCharCode(...a)).replace(/\+/g, '-').replace(/\//g, '_');
+      clearTimeout(custLink.t); custLink.t = setTimeout(save, 0);
+    }
+    return location.origin + location.pathname + '#/p/' + c.link;
+  }
   function publicLink(c, ym) {
     const b = monthBill(c, ym);
     const { codes } = monthCells(c, ym);
@@ -988,7 +1118,7 @@
       t('toPay') + ': *' + rupees(Math.max(0, b.due)) + '*'
     ];
     if (S.vendor.upi) out.push('UPI: ' + S.vendor.upi);
-    out.push('', publicLink(c, ym));
+    out.push('', custLink(c, ym));
     return out.join('\n');
   }
   const waLink = (phone, text) => 'https://wa.me/' + (phone ? waPhone(phone) : '') + '?text=' + encodeURIComponent(text);
@@ -1188,7 +1318,18 @@
   }
   const handlers = {
     undo() { const u = toast.undo; $('#toast').hidden = true; if (u) u(); },
-    lang() { S.vendor.lang = LANGS[(LANGS.indexOf(S.vendor.lang) + 1) % LANGS.length]; save(); render(); },
+    lang() {
+      if ((location.hash.split('/')[1] || '') === 'p' && pub.data) {
+        pub.lang = LANGS[(LANGS.indexOf(pub.lang || pub.vlang) + 1) % LANGS.length]; lsSet('lw.plang', pub.lang); render(); return;
+      }
+      S.vendor.lang = LANGS[(LANGS.indexOf(S.vendor.lang) + 1) % LANGS.length]; save(); render();
+    },
+    pubpause() { pubSheet('pause'); },
+    pubextra() { pubSheet('extra'); },
+    pubsend(el) { pubSend(el); },
+    pubmonth(el) { const now = monthOf(todayStr()); pub.ym = shiftMonth(pub.ym || now, +el.dataset.n); render(); },
+    reqyes(el, id) { answerReq(id, true); },
+    reqno(el, id) { answerReq(id, false); },
     setlang(el) { S.vendor.lang = el.dataset.val; save(); render(); },
     pick(el) { onlyOn(el); },
     start() {
@@ -1347,7 +1488,7 @@
     },
     delpause(el, id) { const c = cust(id); c.pauses = c.pauses.filter((p) => p.from !== el.dataset.from); save(); closeSheet(); render(); },
     copylink(el, id) {
-      const link = publicLink(cust(id), ui.month || monthOf(todayStr()));
+      const link = custLink(cust(id), ui.month || monthOf(todayStr()));
       if (navigator.share) navigator.share({ title: S.vendor.name, url: link }).catch(() => linkSheet(link));
       else linkSheet(link);
     },
@@ -1447,10 +1588,10 @@
     if (!u) throw new Error('signed out');
     return u.getIdToken();
   }
-  async function api(method, body) {
+  async function api(method, body, path) {
     const ctl = new AbortController();
     const stop = setTimeout(() => ctl.abort(), 20000);
-    const res = await fetch('api/ledger', { method, signal: ctl.signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await idToken() }, body: body ? JSON.stringify(body) : undefined });
+    const res = await fetch(path || 'api/ledger', { method, signal: ctl.signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await idToken() }, body: body ? JSON.stringify(body) : undefined });
     clearTimeout(stop);
     return { status: res.status, data: await res.json().catch(() => ({})) };
   }
@@ -1460,7 +1601,12 @@
     const byId = (a, b) => { const m = new Map(); (a || []).forEach((x) => m.set(x.id, x)); (b || []).forEach((x) => m.set(x.id, x)); return [...m.values()]; };
     const marks = JSON.parse(JSON.stringify(remote.marks || {}));
     Object.keys(local.marks || {}).forEach((d) => { marks[d] = Object.assign(marks[d] || {}, local.marks[d]); });
-    return { vendor: Object.assign({}, remote.vendor, local.vendor), products: byId(remote.products, local.products), customers: byId(remote.customers, local.customers), marks, payments: byId(remote.payments, local.payments) };
+    // A customer's page link must survive even when the other phone's copy of that customer wins.
+    const customers = byId(remote.customers, local.customers).map((c) => {
+      const r = (remote.customers || []).find((x) => x.id === c.id);
+      return !c.link && r && r.link ? Object.assign({}, c, { link: r.link }) : c;
+    });
+    return { vendor: Object.assign({}, remote.vendor, local.vendor), products: byId(remote.products, local.products), customers, marks, payments: byId(remote.payments, local.payments) };
   }
   function setSync(st) {
     sync.state = st;
@@ -1506,7 +1652,52 @@
       localSave(); lsSet(metaKey(), meta);
       setSync('idle'); render();
       if (meta.dirty) push();
+      loadReqs();
     } catch (e) { setSync('error'); }
+  }
+  // ---------- customer requests (vendor side) ----------
+  const reqs = { list: [], at: 0 };
+  async function loadReqs() {
+    if (!acct || !navigator.onLine) return;
+    reqs.at = Date.now();
+    try {
+      const r = await api('GET', null, 'api/requests');
+      if (r.status !== 200) return;
+      const before = JSON.stringify(reqs.list.map((x) => x.id));
+      reqs.list = r.data.requests || [];
+      if (JSON.stringify(reqs.list.map((x) => x.id)) !== before && !$('#sheet-root').innerHTML) render();
+    } catch (e) { /* tried again on the next check */ }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - reqs.at > 30000) loadReqs(); });
+  setInterval(() => { if (document.visibilityState === 'visible') loadReqs(); }, 120000);
+  function reqCard() {
+    const list = reqs.list.map((r) => ({ r, c: cust(r.customer_id) })).filter((x) => x.c && !x.c.deleted);
+    if (!list.length) return '';
+    return '<div class="card"><div class="ctitle">' + ic('chat') + '<h2 class="grow">' + esc(t('custReqs')) + ' <span class="tag amber">' + list.length + '</span></h2></div><div class="log">' +
+      list.map(({ r, c }) => '<div class="payrow" style="flex-direction:column;align-items:stretch"><div><b>' + esc([c.flat, c.name].filter(Boolean).join(' · ')) + '</b><div style="font-weight:600">' + esc(reqLine(r.kind, r.data, c)) + '</div>' +
+        (r.data.note ? '<div class="muted" style="font-size:13px;font-weight:600">“' + esc(r.data.note) + '”</div>' : '') + '</div>' +
+        '<div class="btns" style="margin-top:4px"><button class="btn soft" style="min-height:44px" data-act="reqno" data-id="' + r.id + '">' + esc(t('decline')) + '</button>' +
+        '<button class="btn" style="min-height:44px" data-act="reqyes" data-id="' + r.id + '">' + ic('check', 'sm') + esc(t('approve')) + '</button></div></div>').join('') + '</div></div>';
+  }
+  async function answerReq(id, yes) {
+    const r = reqs.list.find((x) => String(x.id) === String(id));
+    if (!r) return;
+    if (!navigator.onLine) { toast(t('needNetPage')); return; }
+    const res = await api('POST', { status: yes ? 'approved' : 'declined' }, 'api/requests/' + r.id).catch(() => null);
+    if (!res || res.status !== 200) { toast(t('notSynced')); return; }
+    const c = cust(r.customer_id);
+    if (yes && c) {
+      const d = r.data;
+      if (r.kind === 'pause') { c.pauses = c.pauses || []; c.pauses.push({ from: d.from, to: d.to }); }
+      else {
+        const it = lineOf(c, d.item); const key = lkey(c, it);
+        const m = (S.marks[d.day] || {})[key];
+        setMark(key, d.day, { s: 'extra', x: +d.qty + (m && m.s === 'extra' ? +(m.x || 0) : 0) });
+      }
+      save();
+    }
+    reqs.list = reqs.list.filter((x) => x !== r);
+    render(); toast(yes ? t('reqApplied') : t('reqDeclined'));
   }
   async function signedIn(u) {
     const fresh = !acct || acct.uid !== u.uid;
@@ -1525,6 +1716,8 @@
     return new Promise((ok, no) => { const el = document.createElement('script'); el.src = src; el.onload = ok; el.onerror = no; document.head.appendChild(el); });
   }
   async function boot() {
+    // A customer opening their page needs no sign-in, so don't load it on their phone.
+    if (/^#\/[ps]\//.test(location.hash) && !lsGet('lw.account')) { auth.ready = true; return; }
     let cfg = null;
     try {
       const ctl = new AbortController();
@@ -1659,6 +1852,7 @@
     let html;
     const r = route || '';
     if (r === 's') html = viewPublic(a || '');
+    else if (r === 'p') html = viewLive(a || '');
     else if (!auth.ready || auth.loading) html = viewSplash();
     else if (auth.mode === 'server' && !acct) html = viewLogin();
     else if (!S.vendor.name) html = viewWelcome();
@@ -1671,7 +1865,7 @@
     else if (r === 'settings') html = viewSettings();
     else if (r === 'order') html = viewOrder();
     else html = viewRoute();
-    const tabbed = r !== 's' && auth.ready && !auth.loading && (auth.mode === 'local' || !!acct) && !!S.vendor.name && (isRoute(r) || ['customers', 'money', 'stock'].includes(r) || (r === 'edit' && a === 'new'));
+    const tabbed = r !== 's' && r !== 'p' && auth.ready && !auth.loading && (auth.mode === 'local' || !!acct) && !!S.vendor.name && (isRoute(r) || ['customers', 'money', 'stock'].includes(r) || (r === 'edit' && a === 'new'));
     const cur = isRoute(r) ? 'home' : r === 'edit' ? 'edit/new' : r;
     document.body.classList.toggle('has-nav', tabbed);
     document.body.classList.toggle('has-run', tabbed && isRoute(r) && active().length > 0);

@@ -49,7 +49,12 @@ window.STRINGS = {
     noStart: 'Add where your round starts', mapHint: 'Add addresses to your customers, or pin them at the door, to see the route here.',
     needPins: 'Add addresses or pin a few houses first.', orderSaved: 'Route order saved', gpsFail: 'Could not get your location. Turn on location and try again.',
     gettingGps: 'Finding your location…', orderHint: 'Move houses with the arrows. Best order puts the nearest house next; houses without an address stay at the end.',
-    addrNotFound: 'Some addresses were not found on the map', moveUp: 'Move up', moveDown: 'Move down'
+    addrNotFound: 'Some addresses were not found on the map', moveUp: 'Move up', moveDown: 'Move down',
+    requestsT: 'Need a change?', reqWaiting: 'Waiting', reqApproved: 'Confirmed', reqDeclined: 'Declined', pauseReq: 'Pause {from} – {to}',
+    extraReq: 'Extra {q} {u} {item} on {d}', noteOpt: 'Note (optional)', sendReq: 'Send request', dayW: 'Day', amountOf: 'How much',
+    notReady: 'This page is not ready yet. Ask your vendor to open LocalWaala once with internet on.', offlineCopy: 'No internet. Showing the last saved copy.',
+    needNetPage: 'Internet is needed for this.', msgVendor: 'Message on WhatsApp', custReqs: 'Customer requests', approve: 'Approve', decline: 'Decline',
+    reqApplied: 'Added to the khata', reqSent: 'Request sent. {v} will confirm.', comingW: 'Coming'
   },
   hi: {
     namaste: 'नमस्ते,', houses: 'घर', saved: 'सेव', offline: 'नेटवर्क नहीं। फ़ोन में सेव है।',
@@ -100,7 +105,12 @@ window.STRINGS = {
     noStart: 'फेरी शुरू होने की जगह डालें', mapHint: 'रास्ता देखने के लिए ग्राहकों के पते डालें, या दरवाज़े पर खड़े होकर जगह लगाएँ।',
     needPins: 'पहले पते डालें या कुछ घरों की जगह लगाएँ।', orderSaved: 'क्रम सेव हुआ', gpsFail: 'आपकी जगह नहीं मिली। लोकेशन चालू करके फिर कोशिश करें।',
     gettingGps: 'जगह ढूँढ रहे हैं…', orderHint: 'तीर से घर ऊपर-नीचे करें। सबसे अच्छा क्रम सबसे पास वाला घर पहले रखता है; बिना पते वाले घर आख़िर में रहते हैं।',
-    addrNotFound: 'कुछ पते नक्शे पर नहीं मिले', moveUp: 'ऊपर', moveDown: 'नीचे'
+    addrNotFound: 'कुछ पते नक्शे पर नहीं मिले', moveUp: 'ऊपर', moveDown: 'नीचे',
+    requestsT: 'कुछ बदलना है?', reqWaiting: 'इंतज़ार', reqApproved: 'मंज़ूर', reqDeclined: 'मना', pauseReq: '{from} – {to} बंद',
+    extraReq: '{d} को {q} {u} {item} ज़्यादा', noteOpt: 'नोट (ज़रूरी नहीं)', sendReq: 'अनुरोध भेजें', dayW: 'दिन', amountOf: 'कितना',
+    notReady: 'यह पेज अभी तैयार नहीं है। अपने विक्रेता से कहें कि इंटरनेट चालू करके एक बार LocalWaala खोलें।', offlineCopy: 'इंटरनेट नहीं है। आख़िरी सेव कॉपी दिख रही है।',
+    needNetPage: 'इसके लिए इंटरनेट चाहिए।', msgVendor: 'WhatsApp पर मैसेज करें', custReqs: 'ग्राहकों के अनुरोध', approve: 'मंज़ूर', decline: 'मना करें',
+    reqApplied: 'खाते में जुड़ गया', reqSent: 'अनुरोध भेजा गया। {v} पक्का करेंगे।', comingW: 'आने वाला'
   },
   te: {
     namaste: 'నమస్తే,', houses: 'ఇళ్లు', saved: 'సేవ్ అయింది', offline: 'సిగ్నల్ లేదు. ఫోన్‌లో సేవ్ అయింది.',
@@ -151,6 +161,11 @@ window.STRINGS = {
     noStart: 'మీ రౌండ్ ఎక్కడ మొదలవుతుందో చేర్చండి', mapHint: 'రూట్ ఇక్కడ చూడటానికి కస్టమర్లకు చిరునామాలు చేర్చండి, లేదా వారి గుమ్మం దగ్గర పిన్ చేయండి.',
     needPins: 'ముందు చిరునామాలు చేర్చండి లేదా కొన్ని ఇళ్లను పిన్ చేయండి.', orderSaved: 'రూట్ క్రమం సేవ్ అయింది', gpsFail: 'మీ లొకేషన్ దొరకలేదు. లొకేషన్ ఆన్ చేసి మళ్లీ ప్రయత్నించండి.',
     gettingGps: 'మీ లొకేషన్ వెతుకుతున్నాం…', orderHint: 'బాణాలతో ఇళ్లను పైకి కిందికి జరపండి. ఉత్తమ క్రమం దగ్గర ఇంటిని ముందు పెడుతుంది; చిరునామా లేని ఇళ్లు చివరలో ఉంటాయి.',
-    addrNotFound: 'కొన్ని చిరునామాలు మ్యాప్‌లో దొరకలేదు', moveUp: 'పైకి', moveDown: 'కిందికి'
+    addrNotFound: 'కొన్ని చిరునామాలు మ్యాప్‌లో దొరకలేదు', moveUp: 'పైకి', moveDown: 'కిందికి',
+    requestsT: 'ఏదైనా మార్పు కావాలా?', reqWaiting: 'వేచి ఉంది', reqApproved: 'ఒప్పుకున్నారు', reqDeclined: 'వద్దన్నారు', pauseReq: '{from} – {to} ఆపండి',
+    extraReq: '{d} న {q} {u} {item} ఎక్కువ', noteOpt: 'నోట్ (ఐచ్ఛికం)', sendReq: 'అభ్యర్థన పంపండి', dayW: 'రోజు', amountOf: 'ఎంత',
+    notReady: 'ఈ పేజీ ఇంకా సిద్ధంగా లేదు. ఇంటర్నెట్ ఆన్ చేసి ఒకసారి LocalWaala తెరవమని మీ వెండర్‌కు చెప్పండి.', offlineCopy: 'ఇంటర్నెట్ లేదు. చివరగా సేవ్ అయిన కాపీ చూపిస్తున్నాం.',
+    needNetPage: 'దీనికి ఇంటర్నెట్ కావాలి.', msgVendor: 'వాట్సాప్‌లో మెసేజ్ చేయండి', custReqs: 'కస్టమర్ అభ్యర్థనలు', approve: 'ఒప్పుకోండి', decline: 'వద్దు',
+    reqApplied: 'ఖాతాలో చేర్చాం', reqSent: 'అభ్యర్థన పంపాం. {v} ధృవీకరిస్తారు.', comingW: 'రాబోతోంది'
   }
 };

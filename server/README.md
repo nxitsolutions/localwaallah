@@ -96,11 +96,18 @@ DATABASE_URL=postgres://localhost/localwaallah DEV_LOGIN=1 node index.js
 | GET | `/api/config` | Firebase web config for the app (or `devLogin`), and the Maps key if set |
 | GET | `/api/ledger` | The signed-in vendor's khata and its version |
 | PUT | `/api/ledger` | Saves `{ data, baseVersion }`; answers 409 with the server copy if it changed meanwhile |
+| GET | `/api/requests` | Pause and extra requests from customers waiting for the vendor's answer |
+| POST | `/api/requests/:id` | `{ status: "approved" \| "declined" }`; the vendor's phone applies an approval to the khata itself |
+| GET | `/api/public/:link` | No sign-in. One customer's share of the khata and their recent requests, for the live customer page |
+| POST | `/api/public/:link/requests` | No sign-in. A customer asks for a pause `{ kind: "pause", from, to }` or extra `{ kind: "extra", day, item, qty }` |
 | GET | `/healthz` | Health check |
 
-Requests carry `Authorization: Bearer <Firebase ID token>`.
+Requests carry `Authorization: Bearer <Firebase ID token>`, except the two `/api/public` ones. Those are reached by the
+customer's random link code; they return only that customer's deliveries, payments and items, and allow 10 requests an hour
+and 5 waiting at once per customer.
 
 ## Data
 
 - `vendors`: one row per signed-in vendor (Firebase uid, email, phone, name, shop name, last seen).
 - `ledgers`: one row per vendor holding the whole khata as JSON, with a version number.
+- `requests`: pause and extra requests from customer pages, with their status (pending, approved, declined).
