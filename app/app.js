@@ -1446,7 +1446,10 @@
     return u.getIdToken();
   }
   async function api(method, body) {
-    const res = await fetch('api/ledger', { method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await idToken() }, body: body ? JSON.stringify(body) : undefined });
+    const ctl = new AbortController();
+    const stop = setTimeout(() => ctl.abort(), 20000);
+    const res = await fetch('api/ledger', { method, signal: ctl.signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await idToken() }, body: body ? JSON.stringify(body) : undefined });
+    clearTimeout(stop);
     return { status: res.status, data: await res.json().catch(() => ({})) };
   }
   // Two phones changed the same khata: keep everything from both, and this phone's copy where both changed one thing.
@@ -1547,6 +1550,9 @@
       return;
     }
     const fa = auth.fb.auth();
+    // If Firebase cannot finish starting (a broken sign-in page on the server, a stuck redirect), show the
+    // sign-in screen, or the khata already on this phone, instead of loading forever.
+    setTimeout(() => { if (!auth.ready) { auth.ready = true; render(); } }, 10000);
     fa.languageCode = S.vendor.lang === 'hi' ? 'hi' : 'en';
     fa.getRedirectResult().catch((e) => toast(authError(e)));
     fa.onAuthStateChanged((u) => {
@@ -1568,6 +1574,7 @@
   }
   const failed = (e) => { ui.busy = false; render(); const m = authError(e); if (m) toast(m); };
   const fbAuth = () => auth.fb.auth();
+  const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const standalone = () => window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
 
   const viewSplash = () => '<div class="splash">' + brand() + '<span class="muted">' + esc(t('loading')) + '</span></div>';
@@ -1600,7 +1607,10 @@
     google() {
       const fb = auth.fb; const p = new fb.auth.GoogleAuthProvider();
       p.setCustomParameters({ prompt: 'select_account' });
-      (standalone() ? fbAuth().signInWithRedirect(p) : fbAuth().signInWithPopup(p)).catch(failed);
+      // A redirect loses its place on Android when the installed app hands Google's page to a separate browser tab,
+      // so sign in through a popup there. iPhones keep the installed app and the popup apart, so they use the redirect.
+      if (standalone() && isIOS()) { fbAuth().signInWithRedirect(p).catch(failed); return; }
+      fbAuth().signInWithPopup(p).catch((e) => (/popup-blocked/.test((e && e.code) || '') ? fbAuth().signInWithRedirect(p) : Promise.reject(e)).catch(failed));
     },
     emailgo() {
       snapLogin();
