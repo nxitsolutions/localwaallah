@@ -20,6 +20,9 @@ const firebase = {
 };
 // Optional: shows the Google map on the Route screen. It is a browser key, so restrict it to your domain.
 const MAPS_KEY = env.GOOGLE_MAPS_API_KEY || '';
+// Optional: NX Control Tower project key. New vendor accounts are reported to the central dashboard.
+const NX_PROJECT_KEY = env.NX_PROJECT_KEY || '';
+const nxTower = NX_PROJECT_KEY ? import('./nxTower.mjs') : null;
 const hasFirebase = !!(firebase.apiKey && firebase.projectId && firebase.authDomain);
 if (!hasFirebase && !DEV_LOGIN) {
   console.error('Set FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID and FIREBASE_APP_ID (see server/README.md).');
@@ -98,7 +101,7 @@ async function who(req) {
   if (!verify) return null;
   try {
     const d = await verify(tok);
-    return { uid: d.uid, email: d.email || null, phone: d.phone_number || null, name: d.name || null };
+    return { uid: d.uid, email: d.email || null, phone: d.phone_number || null, name: d.name || null, provider: (d.firebase && d.firebase.sign_in_provider) || null };
   } catch (e) {
     return null;
   }
@@ -109,12 +112,17 @@ const authed = (fn) => async (req, res) => {
   const u = await who(req);
   if (!u) return res.status(401).json({ error: 'Please sign in again.' });
   try {
-    await pool.query(
+    const { rows } = await pool.query(
       `INSERT INTO vendors (uid, email, phone, name) VALUES ($1, $2, $3, $4)
        ON CONFLICT (uid) DO UPDATE SET email = COALESCE(EXCLUDED.email, vendors.email), phone = COALESCE(EXCLUDED.phone, vendors.phone),
-         name = COALESCE(EXCLUDED.name, vendors.name), last_seen = now()`,
+         name = COALESCE(EXCLUDED.name, vendors.name), last_seen = now()
+       RETURNING (xmax = 0) AS created`,
       [u.uid, u.email, u.phone, u.name]
     );
+    // xmax = 0 only on a fresh insert: a brand-new vendor. Reported in the background; never blocks or fails the request.
+    if (nxTower && rows[0] && rows[0].created) {
+      nxTower.then((m) => m.reportSignup(NX_PROJECT_KEY, { userId: u.uid, provider: u.provider || 'firebase' })).catch(() => {});
+    }
     await fn(req, res, u);
   } catch (e) {
     console.error(e);
