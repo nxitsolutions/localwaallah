@@ -4,7 +4,7 @@ ENV NODE_ENV=production
 WORKDIR /srv/localwaallah
 COPY server/package.json server/package-lock.json server/
 RUN cd server && npm ci --omit=dev
-COPY server/index.js server/
+COPY server/index.js server/nxTower.mjs server/
 COPY app/ app/
 USER node
 EXPOSE 8080
